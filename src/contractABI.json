@@ -1,5 +1,23 @@
 [
 	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "_newRegistrar",
+				"type": "address"
+			}
+		],
+		"name": "changeRegistrar",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"stateMutability": "nonpayable",
+		"type": "constructor"
+	},
+	{
 		"anonymous": false,
 		"inputs": [
 			{
@@ -7,6 +25,12 @@
 				"internalType": "uint256",
 				"name": "id",
 				"type": "uint256"
+			},
+			{
+				"indexed": false,
+				"internalType": "string",
+				"name": "matricula",
+				"type": "string"
 			},
 			{
 				"indexed": false,
@@ -19,6 +43,12 @@
 				"internalType": "string",
 				"name": "parcel",
 				"type": "string"
+			},
+			{
+				"indexed": false,
+				"internalType": "address",
+				"name": "registeredBy",
+				"type": "address"
 			}
 		],
 		"name": "PropertyRegistered",
@@ -35,9 +65,52 @@
 			},
 			{
 				"indexed": false,
-				"internalType": "bool",
-				"name": "verified",
-				"type": "bool"
+				"internalType": "string",
+				"name": "matricula",
+				"type": "string"
+			},
+			{
+				"indexed": false,
+				"internalType": "string",
+				"name": "fromOwner",
+				"type": "string"
+			},
+			{
+				"indexed": false,
+				"internalType": "string",
+				"name": "toOwner",
+				"type": "string"
+			},
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "timestamp",
+				"type": "uint256"
+			}
+		],
+		"name": "PropertyTransferred",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": true,
+				"internalType": "uint256",
+				"name": "id",
+				"type": "uint256"
+			},
+			{
+				"indexed": false,
+				"internalType": "string",
+				"name": "matricula",
+				"type": "string"
+			},
+			{
+				"indexed": false,
+				"internalType": "address",
+				"name": "verifiedBy",
+				"type": "address"
 			}
 		],
 		"name": "PropertyVerified",
@@ -82,6 +155,53 @@
 		"type": "function"
 	},
 	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": true,
+				"internalType": "address",
+				"name": "oldRegistrar",
+				"type": "address"
+			},
+			{
+				"indexed": true,
+				"internalType": "address",
+				"name": "newRegistrar",
+				"type": "address"
+			}
+		],
+		"name": "RegistrarChanged",
+		"type": "event"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "_id",
+				"type": "uint256"
+			},
+			{
+				"internalType": "string",
+				"name": "_newOwnerName",
+				"type": "string"
+			},
+			{
+				"internalType": "string",
+				"name": "_newOwnerId",
+				"type": "string"
+			},
+			{
+				"internalType": "string",
+				"name": "_transferMetadata",
+				"type": "string"
+			}
+		],
+		"name": "transferProperty",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
 		"inputs": [
 			{
 				"internalType": "uint256",
@@ -102,12 +222,89 @@
 				"type": "uint256"
 			}
 		],
+		"name": "getOwnershipHistory",
+		"outputs": [
+			{
+				"internalType": "string[]",
+				"name": "ownerNames",
+				"type": "string[]"
+			},
+			{
+				"internalType": "string[]",
+				"name": "ownerIds",
+				"type": "string[]"
+			},
+			{
+				"internalType": "uint256[]",
+				"name": "timestamps",
+				"type": "uint256[]"
+			},
+			{
+				"internalType": "string[]",
+				"name": "transferMetas",
+				"type": "string[]"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "string",
+				"name": "_ownerId",
+				"type": "string"
+			}
+		],
+		"name": "getPropertiesByOwnerId",
+		"outputs": [
+			{
+				"internalType": "uint256[]",
+				"name": "",
+				"type": "uint256[]"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "string",
+				"name": "_name",
+				"type": "string"
+			}
+		],
+		"name": "getPropertiesByOwnerName",
+		"outputs": [
+			{
+				"internalType": "uint256[]",
+				"name": "",
+				"type": "uint256[]"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "_id",
+				"type": "uint256"
+			}
+		],
 		"name": "getProperty",
 		"outputs": [
 			{
 				"internalType": "uint256",
 				"name": "id",
 				"type": "uint256"
+			},
+			{
+				"internalType": "string",
+				"name": "matricula",
+				"type": "string"
 			},
 			{
 				"internalType": "string",
@@ -157,6 +354,44 @@
 		"inputs": [
 			{
 				"internalType": "string",
+				"name": "_hash",
+				"type": "string"
+			}
+		],
+		"name": "getPropertyByIpfsHash",
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "string",
+				"name": "_mat",
+				"type": "string"
+			}
+		],
+		"name": "getPropertyByMatricula",
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "string",
 				"name": "_parcel",
 				"type": "string"
 			}
@@ -188,6 +423,63 @@
 	{
 		"inputs": [
 			{
+				"internalType": "string",
+				"name": "_hash",
+				"type": "string"
+			}
+		],
+		"name": "isIpfsHashRegistered",
+		"outputs": [
+			{
+				"internalType": "bool",
+				"name": "",
+				"type": "bool"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "string",
+				"name": "_parcel",
+				"type": "string"
+			}
+		],
+		"name": "isParcelRegistered",
+		"outputs": [
+			{
+				"internalType": "bool",
+				"name": "",
+				"type": "bool"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "_addr",
+				"type": "address"
+			}
+		],
+		"name": "isRegistrar",
+		"outputs": [
+			{
+				"internalType": "bool",
+				"name": "",
+				"type": "bool"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
 				"internalType": "uint256",
 				"name": "",
 				"type": "uint256"
@@ -199,6 +491,11 @@
 				"internalType": "uint256",
 				"name": "id",
 				"type": "uint256"
+			},
+			{
+				"internalType": "string",
+				"name": "matricula",
+				"type": "string"
 			},
 			{
 				"internalType": "string",
@@ -252,6 +549,19 @@
 				"internalType": "uint256",
 				"name": "",
 				"type": "uint256"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "registrar",
+		"outputs": [
+			{
+				"internalType": "address",
+				"name": "",
+				"type": "address"
 			}
 		],
 		"stateMutability": "view",
