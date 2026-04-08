@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Certificado de Título - Blockchain</title>
+    <style>
+        :root {
+            --border-blue: #0076c2;
+        }
+
+        body {
+            background-color: #525659;
+            display: flex;
+            justify-content: center;
+            padding: 20px;
+            font-family: "Times New Roman", Times, serif;
+        }
+
+        .certificate-container {
+           /* Dimensiones para A4 (210mm x 297mm) a 96dpi */
+            width: 794px;
+            height: 1123px;
+            background-color: white;
+
+            background-image: url('public/fondo_de_tituloa4.png'); 
+            background-size: 100% 100%;
+            background-repeat: no-repeat;
+            background-position: center;
+
+            /* Eliminamos bordes antiguos */
+            border: none;
+            outline: none;
+            
+            /* Ajustamos el padding para que el contenido no pise el borde de la imagen */
+            padding: 60px; 
+            box-sizing: border-box;
+            position: relative;
+            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+        }
+
+        .inner-content {
+        width: 95%; /* Ajusta este porcentaje para que el contenido se cierre más o menos */
+        height: 100%; /* Ajusta para que no toque los bordes superior/inferior */
+        margin: 0 auto; /* Lo centra horizontalmente */
+        display: flex;
+        flex-direction: column;
+        position: relative;
+        z-index: 2;
+    }
+
+        /* --- El resto del código se mantiene igual --- */
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 20px;
+            margin-top: 20px; /* Espacio extra para el cabezal del borde */
+        }
+
+        .header-logos {
+            display: flex;
+            gap: 80px;
+            align-items: center;
+        }
+
+        .logo-img { width: 70px; height: auto; }
+        .svg-icon { width: 60px; height: 60px; color: #d32f2f; }
+
+ .title-main {
+        width: 100%;
+        text-align: center;
+        color: var(--border-blue);
+        font-weight: bold;
+        font-size: 26px;
+        letter-spacing: 2px;
+        margin-top: 10px; /* En lugar de absolute, usamos margen superior */
+        margin-bottom: 20px;
+    }
+
+    .main-body, .footer-info-box {
+        width: 100%;
+        box-sizing: border-box;
+    }
+
+        .registration-box { width: 250px; }
+        .input-row { display: flex; align-items: center; margin-bottom: 5px; }
+        .input-row label { font-size: 11px; font-weight: bold; width: 60px; font-family: Arial, sans-serif; }
+        .input-row .field { flex-grow: 1; height: 22px; border: 1px solid #333; background: rgba(255,255,255,0.7); }
+
+        .main-body {
+            border: 1px solid #333;
+            height: 480px; /* Reducido ligeramente por el cambio de proporción */
+            margin-top: 30px;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            align-items: center;
+            padding: 30px;
+            box-sizing: border-box;
+            background: rgba(255,255,255,0.4); /* Un toque de transparencia para ver el fondo sutilmente */
+        }
+
+        .legal-content {
+            text-align: justify;
+            font-size: 14px;
+            line-height: 1.6;
+            color: #000;
+        }
+
+        .registry-text {
+            font-weight: bold; font-size: 18px;
+            margin-top: 10px;
+            font-family: "Times New Roman", Times, serif;
+        }
+
+        .signature-area { text-align: center; }
+        .signature-img-container {
+            width: 180px; height: 60px;
+            margin: 0 auto;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .signature-png { max-width: 100%; max-height: 100%; object-fit: contain; }
+        
+        .registrar-title {
+            
+            border-top: 1px solid #000;
+            padding-top: 5px;
+            width: 250px;
+            font-size: 12px;
+        }
+
+        .seal-left { position: absolute; bottom: 20px; left: 20px; width: 90px; opacity: 0.8; }
+        .seal-right { position: absolute; bottom: 100px; right: 30px; width: 100px; opacity: 0.6; }
+
+        .footer-info-box {
+            border: 1px solid #333;
+            margin-top: 15px;
+            padding: 8px 15px;
+            background: rgba(255, 255, 255, 0.7);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .blockchain-info { font-size: 10px; line-height: 1.4; font-family: Arial, sans-serif; }
+        .qr-box { text-align: center; width: 90px; }
+        .qr-box img { width: 65px; height: 65px; }
+
+        .footer-validation {
+            margin-top: 30px;
+            text-align: center;
+            font-size: 9px;
+            color: #444;
+            font-family: Arial, sans-serif;
+        }
+
+        .demo-text {
+            text-align: center;
+            font-weight: bold;
+            color: var(--border-blue);
+            font-size: 22px;
+            margin-top: 20px;
+            letter-spacing: 5px;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="certificate-container">
+        <div class="inner-content">
+            
+            <div class="title-main">CERTIFICADO DE TÍTULO</div>
+
+        <div class="header">
+            <div style="display: flex; flex-direction: column;">
+                <div class="header-logos">
+                    <img src="public/escudo.png" alt="Escudo Nacional" class="logo-img">
+                    <div class="svg-icon">
+                        <svg width="100%" height="100%" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M12 2L2 7L12 12L22 7L12 2Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path>
+                            <path d="M2 17L12 22L22 17" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path>
+                            <path d="M2 12L12 17L22 12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path>
+                        </svg>
+                    </div>
+                </div>
+                <div class="registry-text">REGISTRO DE TÍTULOS</div>
+            </div>
+
+            <div class="registration-box">
+                <div class="input-row"><label>Matricula</label><div class="field"></div></div>
+                <div class="input-row"><label>Provincia</label><div class="field"></div></div>
+                <div class="input-row"><label>Municipio</label><div class="field"></div></div>
+            </div>
+        </div>
+
+        <div class="main-body">
+            <div class="legal-content">
+                En virtud de la Ley y en nombre de la República se declara <strong>TITULAR DEL DERECHO DE PROPIEDAD</strong> a <strong>[Nombre del titular]</strong>, de nacionalidad Dominicana, mayor de edad, Cédula de Identidad No. <strong>[Número de Cédula]</strong>, sobre el inmueble identificado como <strong>[Designación Catastral]</strong>, que tiene una superficie de <strong>[Metros Cuadrados]</strong>, matrícula <strong>[Número de Matrícula]</strong>, ubicado en <strong>[Ubicación Geográfica]</strong>.
+            </div>
+
+            <div class="signature-area">
+                <div class="signature-img-container">
+                    <img src="public/signature.png" alt="Firma" class="signature-png">
+                </div>
+                <div class="registrar-title">Registrador de Títulos Adscrito</div>
+                <p style="margin: 5px 0 0 0; font-size: 13px;"><strong>Arianny Cristina Batista</strong></p>
+            </div>
+
+            <div class="seal-left"><img src="public/sello1.png" style="width: 100%;"></div>
+            <div class="seal-right"><img src="public/sello2.png" style="width: 100%;"></div>
+        </div>
+
+        <div class="footer-info-box">
+            <div class="blockchain-info">
+                <div style="display: flex; align-items: center; gap: 5px; margin-bottom: 3px;">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="color: var(--border-blue);">
+                        <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+                        <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+                    </svg>
+                    <strong style="color: var(--border-blue);">INFORMACIÓN DE BLOCKCHAIN</strong>
+                </div>
+                ID: <strong>#3</strong> | Hash IPFS: <code style="font-size: 9px; background: #eee;">PENDIENTE</code><br>
+                Red: Sepolia Testnet | Contrato: 0xC5117F33935DcFEB2E...<br>
+                Tipo: <strong>REGISTRO INICIAL</strong>
+            </div>
+
+            <div class="qr-box">
+                <img src="data:image/png;base64,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" alt="QR Code">
+                <p style="font-size: 7px; margin-top: 3px; font-weight: bold;">Validar Blockchain</p>
+            </div>
+        </div>
+
+        <div class="demo-text">DOCUMENTO DEMOSTRATIVO</div>
+
+        <div class="footer-validation">
+            <p>Documento validado en Blockchain de Ethereum | Inmutable y verificable públicamente</p>
+            <p><strong>https://verificar.titulos.gob.do/3</strong></p>
+        </div>
+
+        </div>
+    </div>
+
+</body>
+</html>

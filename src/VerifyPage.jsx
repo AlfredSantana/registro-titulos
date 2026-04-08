@@ -132,11 +132,13 @@ const parseProperty = (result) => {
 };
 
 // ─── Componente: Card resumen en lista de múltiples títulos ───────────────────
+// ─── Componente: Card resumen en lista de múltiples títulos ───────────────────
 function PropertySummaryCard({ prop, onSelect }) {
   return (
     <div className="summary-card" onClick={() => onSelect(prop.id)}>
       <div className="summary-left">
-        <div className="summary-matricula">{prop.matricula}</div>
+        <div className="summary-owner">{prop.ownerName}</div>
+        <div className="summary-matricula">Matrícula: {prop.matricula}</div>
         <div className="summary-parcel">Parcela: {prop.parcel} &nbsp;·&nbsp; {prop.area} m²</div>
         <div className="summary-location">{prop.propertyLocation || 'Ubicación no especificada'} {prop.district ? `— ${prop.district}` : ''}</div>
       </div>
@@ -229,137 +231,118 @@ function VerifyPage() {
     } finally { setLoading(false); }
   };
 
-  const handleSearch = async (e) => {
-    e.preventDefault();
-    if (!contract || !searchVal.trim()) return;
-    const val = searchVal.trim();
+const handleSearch = async (e) => {
+  e.preventDefault();
+  if (!contract || !searchVal.trim()) return;
+  const val = searchVal.trim();
+
+  try {
+    setSearching(true);
+    setError(null);
+    setProperty(null);
+    setMultipleResults([]);
+
+    // --- LÓGICA DE DETECCIÓN AUTOMÁTICA ---
+    
+    // 1. ¿Es un Hash IPFS? (Empieza con Qm y es largo)
+    if (val.startsWith('Qm') && val.length > 30) {
+      const numId = await contract.getPropertyByIpfsHash(val);
+      if (Number(numId) === 0) throw new Error('No se encontró IPFS');
+      await loadPropertyById(Number(numId));
+    } 
+    
+    // 2. ¿Es una Cédula? (Contiene guiones o solo números de 11 dígitos)
+    else if (/^\d{3}-?\d{7}-?\d{1}$/.test(val)) {
+      const ids = await contract.getPropertiesByOwnerId(val);
+      if (!ids || ids.length === 0) throw new Error('Cédula no registrada');
+      if (ids.length === 1) await loadPropertyById(Number(ids[0]));
+      else {
+        const props = await Promise.all(ids.map(async (id) => parseProperty(await contract.getProperty(Number(id)))));
+        setMultipleResults(props);
+      }
+    }
+
+    // 3. ¿Es una Matrícula? (Ejemplo: RD-XXXX)
+    else if (val.toUpperCase().startsWith('RD-') || /^\d{10,}$/.test(val)) {
+      const numId = await contract.getPropertyByMatricula(val);
+      if (Number(numId) === 0) throw new Error('Matrícula no encontrada');
+      await loadPropertyById(Number(numId));
+    }
+
+    // 4. Búsqueda por NOMBRE (con coincidencia parcial)
+    else {
+      // Obtener el total de títulos registrados
+      const total = await contract.getTotalProperties();
+      const totalNum = Number(total);
+      
+      if (totalNum === 0) {
+        throw new Error('No hay títulos registrados en el sistema.');
+      }
+      
+      // Cargar todos los títulos
+      const allIds = [];
+      for (let i = 1; i <= totalNum; i++) {
+        allIds.push(i);
+      }
+      
+      const allProperties = await Promise.all(
+        allIds.map(async (id) => {
+          const result = await contract.getProperty(id);
+          return parseProperty(result);
+        })
+      );
+      
+      // Filtrar por coincidencia parcial (insensible a mayúsculas/minúsculas)
+      const searchLower = val.toLowerCase();
+      const matched = allProperties.filter(prop => 
+        prop.ownerName.toLowerCase().includes(searchLower)
+      );
+      
+      if (matched.length === 0) {
+        throw new Error(`No se encontraron títulos para "${val}".`);
+      }
+      
+        // Si hay múltiples, mostramos la lista
+        setMultipleResults(matched);
+    }
+
+  } catch (err) {
+    console.error("Error en búsqueda:", err);
+    setError(err.message || 'No se encontraron resultados para su búsqueda.');
+  } finally {
+    setSearching(false);
+  }
+};
+
+  const downloadCertificate = async () => {
+    if (!property || !property.ipfsUrl) return;
 
     try {
-      setSearching(true);
-      setError(null);
-      setProperty(null);
-      setMultipleResults([]);
-      setHistory([]);
-      setQrCodeUrl('');
-
-      if (searchType === 'matricula') {
-        const numId = await contract.getPropertyByMatricula(val);
-        if (Number(numId) === 0) { setError('No se encontró ningún título con esa matrícula.'); return; }
-        await loadPropertyById(Number(numId));
-
-      } else if (searchType === 'cedula') {
-        const ids = await contract.getPropertiesByOwnerId(val);
-        if (!ids || ids.length === 0) { setError('No se encontraron títulos para esa cédula.'); return; }
-        if (ids.length === 1) {
-          await loadPropertyById(Number(ids[0]));
-        } else {
-          // Múltiples títulos — cargar resumen de cada uno
-          const props = await Promise.all(ids.map(async (rawId) => {
-            const r = await contract.getProperty(Number(rawId));
-            return parseProperty(r);
-          }));
-          setMultipleResults(props);
-        }
-
-      } else if (searchType === 'nombre') {
-        const ids = await contract.getPropertiesByOwnerName(val);
-        if (!ids || ids.length === 0) { setError('No se encontraron títulos para ese nombre.'); return; }
-        if (ids.length === 1) {
-          await loadPropertyById(Number(ids[0]));
-        } else {
-          const props = await Promise.all(ids.map(async (rawId) => {
-            const r = await contract.getProperty(Number(rawId));
-            return parseProperty(r);
-          }));
-          setMultipleResults(props);
-        }
-
-      } else if (searchType === 'ipfs') {
-        const numId = await contract.getPropertyByIpfsHash(val);
-        if (Number(numId) === 0) { setError('No se encontró ningún título con ese hash IPFS.'); return; }
-        await loadPropertyById(Number(numId));
-      }
-
+      // 1. Descargamos el archivo desde el enlace de IPFS
+      const response = await fetch(property.ipfsUrl);
+      if (!response.ok) throw new Error('Error al conectar con IPFS');
+      
+      const blob = await response.blob();
+      
+      // 2. Creamos un link temporal para forzar la descarga en el navegador
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      
+      // Nombre con el que se guardará el archivo en la PC
+      link.setAttribute('download', `Titulo_Oficial_${property.matricula}.pdf`);
+      
+      document.body.appendChild(link);
+      link.click();
+      
+      // 3. Limpieza de memoria
+      link.parentNode.removeChild(link);
+      window.URL.revokeObjectURL(url);
     } catch (err) {
-      console.error(err);
-      setError('Error al realizar la búsqueda. Verifique el dato ingresado.');
-    } finally { setSearching(false); }
-  };
-
-  const downloadCertificate = () => {
-    if (!property) return;
-    const historyRows = history.map((h, i) => `
-      <div class="field">
-        <span class="field-label">${i === 0 ? 'Registro inicial' : `Traspaso #${i}`}</span>
-        <span class="field-value">${h.ownerName} — ${h.ownerId} — ${h.timestamp}</span>
-      </div>`).join('');
-
-    const html = `<!DOCTYPE html>
-<html><head>
-  <meta charset="UTF-8">
-  <title>Certificado — ${property.matricula}</title>
-  <style>
-    @import url('https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600;700&display=swap');
-    body { font-family: 'Source Sans 3', Arial, sans-serif; padding: 48px; max-width: 820px; margin: 0 auto; color: #1A202C; }
-    .header { text-align: center; border-top: 8px solid #002868; border-bottom: 3px solid #CE1126; padding: 28px 0 20px; margin-bottom: 36px; }
-    .gov-title { font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; color: #002868; margin-bottom: 8px; }
-    .cert-title { font-size: 26px; font-weight: 700; color: #002868; margin: 8px 0; }
-    .cert-sub { font-size: 12px; color: #7f8c8d; letter-spacing: 0.06em; text-transform: uppercase; }
-    .matricula-box { display: inline-block; margin-top: 14px; padding: 8px 24px; background: #002868; color: white; border-radius: 4px; font-size: 18px; font-weight: 700; letter-spacing: 0.08em; font-family: monospace; }
-    .status-badge { display: inline-block; margin-top: 10px; padding: 6px 18px; border-radius: 3px; font-size: 12px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; background: ${property.isVerified ? '#C6F6D5' : '#FEEBC8'}; color: ${property.isVerified ? '#276749' : '#744210'}; }
-    .section-title { font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: #002868; border-bottom: 2px solid #002868; padding-bottom: 6px; margin: 28px 0 14px; }
-    .field { display: flex; padding: 9px 0; border-bottom: 1px solid #EDF2F7; font-size: 13.5px; }
-    .field-label { width: 200px; flex-shrink: 0; font-weight: 700; color: #4A5568; font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; }
-    .field-value { color: #1A202C; }
-    .qr-section { text-align: center; margin: 32px 0; padding: 24px; border: 1.5px solid #E2E8F0; border-radius: 6px; }
-    .qr-section img { width: 130px; height: 130px; }
-    .qr-section p { font-size: 11.5px; color: #718096; margin-top: 10px; letter-spacing: 0.04em; text-transform: uppercase; }
-    .footer { margin-top: 40px; text-align: center; font-size: 11.5px; color: #A0AEC0; border-top: 1px solid #E2E8F0; padding-top: 20px; }
-    .footer p + p { margin-top: 4px; }
-  </style>
-</head><body>
-  <div class="header">
-    <div class="gov-title">República Dominicana — Jurisdicción Inmobiliaria</div>
-    <div class="cert-title">Certificado de Título de Propiedad</div>
-    <div class="cert-sub">Registro inmutable en Blockchain — Red Sepolia</div>
-    <div class="matricula-box">${property.matricula}</div><br/>
-    <div class="status-badge">${property.isVerified ? 'Verificado en Blockchain' : 'Pendiente de Verificación'}</div>
-  </div>
-  <div class="section-title">Información del Título</div>
-  <div class="field"><span class="field-label">Matrícula</span><span class="field-value">${property.matricula}</span></div>
-  <div class="field"><span class="field-label">Parcela</span><span class="field-value">${property.parcel}</span></div>
-  <div class="field"><span class="field-label">Superficie</span><span class="field-value">${property.area} m²</span></div>
-  <div class="field"><span class="field-label">Distrito Catastral</span><span class="field-value">${property.district || 'No especificado'}</span></div>
-  <div class="field"><span class="field-label">Ubicación</span><span class="field-value">${property.propertyLocation || 'No especificada'}</span></div>
-  <div class="field"><span class="field-label">Fecha de Registro</span><span class="field-value">${property.registrationDate || property.timestamp}</span></div>
-  <div class="field"><span class="field-label">Timestamp Blockchain</span><span class="field-value">${property.timestamp}</span></div>
-  <div class="section-title">Propietario Actual</div>
-  <div class="field"><span class="field-label">Nombre</span><span class="field-value">${property.ownerName}</span></div>
-  <div class="field"><span class="field-label">Cédula</span><span class="field-value">${property.ownerId}</span></div>
-  <div class="field"><span class="field-label">Nacionalidad</span><span class="field-value">${property.nationality || 'Dominicana'}</span></div>
-  ${history.length > 0 ? `<div class="section-title">Historial de Propietarios</div>${historyRows}` : ''}
-  <div class="section-title">Datos Blockchain</div>
-  <div class="field"><span class="field-label">Contrato</span><span class="field-value" style="font-family:monospace;font-size:12px">${CONTRACT_ADDRESS}</span></div>
-  <div class="qr-section">
-    <img src="${qrCodeUrl}" alt="QR" />
-    <p>Escanee para verificar la autenticidad del título</p>
-  </div>
-  <div class="footer">
-    <p>Este certificado fue registrado en la blockchain de Ethereum (Red Sepolia).</p>
-    <p>Verificación: ${window.location.origin}/verify/${property.id}</p>
-    <p>Emisión: ${new Date().toLocaleString()}</p>
-  </div>
-</body></html>`;
-
-    const blob = new Blob([html], { type: 'text/html' });
-    const url  = URL.createObjectURL(blob);
-    const a    = document.createElement('a');
-    a.href = url;
-    a.download = `Certificado_${property.matricula}.html`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+      console.error("Error descargando:", err);
+      // Si falla por seguridad (CORS), simplemente abrimos el link en otra pestaña
+      window.open(property.ipfsUrl, '_blank');
+    }
   };
 
   const placeholders = {
@@ -392,8 +375,24 @@ function VerifyPage() {
         body { background: var(--gris-claro); font-family: 'Source Sans 3', sans-serif; color: #1A202C; }
         .vp-app { min-height: 100vh; display: flex; flex-direction: column; }
 
-        .top-bar { background: #001a42; padding: 6px 32px; display: flex; align-items: center; gap: 8px; font-size: 11.5px; color: rgba(255,255,255,0.60); letter-spacing: 0.05em; text-transform: uppercase; }
-        .top-bar svg { opacity: 0.6; }
+        .top-bar { 
+  background: #001a42; 
+  padding: 8px 32px; 
+  display: flex; 
+  justify-content: center; 
+  align-items: center;  /* ← Asegura alineación vertical */
+  gap: 10px; 
+  font-size: 11.5px; 
+  color: rgba(255,255,255,0.60); 
+  letter-spacing: 0.05em; 
+  text-transform: uppercase; 
+}
+.top-bar svg { 
+  opacity: 0.8;
+  vertical-align: middle;  /* ← Alinea el icono con el texto */
+  margin-top: -2px;        /* ← Ajuste fino (puedes cambiar el valor) */
+}
+
         .gov-header { background: #002868; padding: 0; border-bottom: 4px solid #CE1126; }
         .header-inner { width: 100%; padding: 20px 32px; display: flex; align-items: center; gap: 18px; }
         .header-logo-box { color: rgba(255,255,255,0.90); flex-shrink: 0; display: flex; align-items: center; }
@@ -402,7 +401,7 @@ function VerifyPage() {
         .header-accent { flex: 1; }
         .header-badge { display: flex; align-items: center; gap: 8px; background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.25); border-radius: 20px; padding: 8px 18px; font-size: 14px; color: rgba(255,255,255,0.90); }
 
-        .vp-main { width: 100%; padding: 36px 32px 60px; flex: 1; }
+        .vp-main { width: 100%; padding: 32px 180px 60px; flex: 1; }
 
         /* Buscador */
         .search-card { background: var(--blanco); border: 1px solid var(--gris-borde); border-radius: 6px; box-shadow: var(--sombra); overflow: hidden; margin-bottom: 28px; }
@@ -424,14 +423,57 @@ function VerifyPage() {
         .error-notice { display: flex; align-items: center; gap: 10px; background: #FFF5F5; border: 1.5px solid #FEB2B2; border-radius: 6px; padding: 14px 18px; color: #C53030; font-size: 13.5px; margin-top: 16px; }
 
         /* Lista múltiples resultados */
-        .multi-header { font-size: 13px; color: var(--gris-texto); margin: 20px 0 12px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; }
-        .summary-card { display: flex; align-items: center; gap: 16px; background: var(--blanco); border: 1.5px solid var(--gris-borde); border-radius: 6px; padding: 14px 18px; margin-bottom: 10px; cursor: pointer; transition: border-color 0.15s, box-shadow 0.15s; }
-        .summary-card:hover { border-color: var(--azul-claro); box-shadow: 0 2px 12px rgba(0,45,110,0.10); }
-        .summary-left { flex: 1; }
-        .summary-matricula { font-family: monospace; font-size: 16px; font-weight: 700; color: var(--azul); letter-spacing: 0.06em; }
-        .summary-parcel { font-size: 13px; color: var(--gris-texto); margin-top: 3px; }
-        .summary-location { font-size: 12px; color: #A0AEC0; margin-top: 2px; }
-        .summary-right { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
+
+        .multi-header { 
+        font-size: 13px; 
+        color: var(--gris-texto); 
+        margin: 20px 0 12px; 
+        font-weight: 600; 
+        letter-spacing: 0.04em; 
+        text-transform: uppercase; 
+        }
+
+        .summary-card { 
+        display: flex; 
+        align-items: center; 
+        gap: 16px; 
+        background: var(--blanco); 
+        border: 1.5px solid var(--gris-borde); 
+        border-radius: 6px; 
+        padding: 14px 18px; 
+        margin-bottom: 10px; 
+        cursor: pointer; 
+        transition: border-color 0.15s, box-shadow 0.15s; 
+        }
+
+        .summary-card:hover { 
+        border-color: var(--azul-claro); 
+        box-shadow: 0 2px 12px rgba(0,45,110,0.10); 
+        }
+
+        .summary-left { 
+        flex: 1; 
+        }
+        
+        .summary-matricula {
+  font-family: monospace;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--azul);
+  letter-spacing: 0.05em;
+  margin-top: 4px;
+}
+
+        .summary-parcel {
+  font-size: 12px;
+  color: var(--gris-texto);
+  margin-top: 3px;
+}
+        .summary-location {
+  font-size: 11px;
+  color: #A0AEC0;
+  margin-top: 2px;
+}
 
         /* Status banner */
         .status-banner { border-radius: 6px 6px 0 0; padding: 20px 28px; display: flex; align-items: center; gap: 14px; }
@@ -472,8 +514,10 @@ function VerifyPage() {
         .qr-box { text-align: center; }
         .qr-box img { border: 1.5px solid var(--gris-borde); border-radius: 4px; display: block; }
         .qr-box small { font-size: 10.5px; color: #A0AEC0; letter-spacing: 0.06em; text-transform: uppercase; margin-top: 8px; display: block; }
-        .actions-text { flex: 1; min-width: 200px; }
-        .actions-text h3 { font-family: 'EB Garamond', serif; font-size: 18px; color: var(--azul); margin-bottom: 6px; }
+
+        .actions-text { flex: 1; 
+        min-width: 200px; }
+        .actions-text h3 { font-family: 'EB Garamond', serif; font-size: 18px; color: var(--azul); margin-bottom: 2px; }
         .actions-text p { font-size: 13px; color: var(--gris-texto); line-height: 1.5; }
         .actions-btns { display: flex; flex-direction: column; gap: 10px; }
 
@@ -506,14 +550,121 @@ function VerifyPage() {
         .gov-footer-item { display: flex; align-items: center; gap: 6px; }
 
         @media (max-width: 680px) {
-          .vp-main { padding: 20px 16px 40px; }
-          .header-inner { padding: 20px 16px; }
-          .top-bar { padding: 6px 16px; }
-          .cert-row { flex-direction: column; gap: 4px; }
-          .cert-key { width: auto; }
-          .actions-panel { flex-direction: column; }
-          .search-tabs { gap: 6px; }
-        }
+  /* Layout general */
+  .vp-main { 
+    padding: 20px 16px 40px; 
+  }
+  
+  /* Header */
+  .header-inner { 
+    padding: 16px; 
+    flex-wrap: wrap;
+    justify-content: center;
+    text-align: center;
+  }
+  .header-text h1 {
+    font-size: 18px;
+  }
+  .header-text p {
+    font-size: 11px;
+  }
+  .header-badge {
+    padding: 4px 12px;
+    font-size: 11px;
+  }
+  
+  /* TOP BAR - MÓVIL */
+  .top-bar { 
+    padding: 8px 12px;
+    font-size: 9px;
+    text-align: center;
+    line-height: 1.4;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .top-bar svg {
+    width: 12px;
+    height: 12px;
+    margin-top: 0;
+  }
+  
+  /* Cards y filas */
+  .cert-row { 
+    flex-direction: column; 
+    gap: 4px; 
+  }
+  .cert-key { 
+    width: auto; 
+  }
+  
+  /* Panel de acciones */
+  .actions-panel { 
+    flex-direction: column; 
+    align-items: center;
+    text-align: center;
+  }
+  .actions-panel .actions-text {
+    text-align: center;
+  }
+  .actions-panel .actions-btns {
+    align-items: center;
+  }
+  
+  /* Pestañas de búsqueda */
+  .search-tabs { 
+    gap: 6px;
+    justify-content: center;
+  }
+  .search-tab {
+    padding: 5px 10px;
+    font-size: 11px;
+  }
+  
+  /* Barra de búsqueda */
+  .search-bar {
+    flex-direction: column;
+  }
+  .search-bar .btn {
+    width: 100%;
+    justify-content: center;
+  }
+  
+  /* Tarjetas de resultados */
+  .summary-card {
+    flex-direction: column;
+    text-align: center;
+    gap: 10px;
+  }
+  .summary-left {
+    text-align: center;
+  }
+  .summary-right {
+    justify-content: center;
+  }
+  
+  /* Footer */
+  .gov-footer-items {
+    flex-direction: column;
+    gap: 8px;
+    align-items: center;
+  }
+  .gov-footer {
+    padding: 16px;
+    font-size: 9px;
+  }
+  
+  /* Botones */
+  .btn {
+    padding: 8px 16px;
+    font-size: 12px;
+  }
+  
+  /* QR */
+  .qr-box img {
+    width: 100px;
+    height: 100px;
+  }
+}
       `}</style>
 
       <div className="vp-app">
@@ -535,198 +686,165 @@ function VerifyPage() {
         </header>
 
         <main className="vp-main">
+          
+          {/* Buscador Único Inteligente */}
+ <div className="search-card">
+  <div className="search-card-header">
+    <IconSearch size={16} />
+    <h2>Consulta Unificada de Títulos</h2>
+  </div>
+  <div className="search-card-body">
+    <form onSubmit={handleSearch} className="search-bar">
+      <input 
+        type="text" 
+        placeholder="Ingrese Nombre, Cédula, Matrícula o Hash IPFS"
+        value={searchVal} 
+        onChange={e => setSearchVal(e.target.value)}
+        className="form-control"
+        style={{ fontSize: '16px', padding: '15px' }} 
+      />
+      <button type="submit" className="btn btn-primary" disabled={searching}>
+        {searching ? 'Buscando...' : 'Buscar'}
+      </button>
+    </form>
+    <p className="search-hint" style={{ marginTop: '12px' }}>
+      <strong>Tip:</strong> El sistema detecta automáticamente el tipo de dato ingresado mediante algoritmos de validación.
+    </p>
+  </div>
+ </div>
 
-          {/* Buscador siempre visible */}
-          <div className="search-card">
-            <div className="search-card-header"><IconSearch size={16} /><h2>Buscar Título de Propiedad</h2></div>
-            <div className="search-card-body">
-              <div className="search-tabs">
-                {searchTabs.map(t => (
-                  <button key={t.key} type="button"
-                    className={`search-tab${searchType === t.key ? ' active' : ''}`}
-                    onClick={() => { setSearchType(t.key); setProperty(null); setMultipleResults([]); setError(null); setSearchVal(''); }}>
-                    {t.icon} {t.label}
-                  </button>
-                ))}
-              </div>
-              <form onSubmit={handleSearch} className="search-bar">
-                <input type="text" placeholder={placeholders[searchType]}
-                  value={searchVal} onChange={e => setSearchVal(e.target.value)} className="form-control" />
-                <button type="submit" className="btn btn-primary btn-sm" disabled={searching || loading}>
-                  <IconSearch size={15} /> {searching ? 'Buscando...' : 'Buscar'}
-                </button>
-              </form>
-              <div className="search-hint">
-                {searchType === 'cedula' && 'Si el propietario tiene más de un título, aparecerán todos listados.'}
-                {searchType === 'nombre' && 'La búsqueda por nombre no distingue mayúsculas. Si hay varios resultados, aparecerán listados.'}
-                {searchType === 'matricula' && 'Formato de matrícula: RD-YYMMDD-XXXX (ej: RD-240105-0001)'}
-                {searchType === 'ipfs' && 'Ingrese el hash IPFS completo del documento adjunto al título.'}
-              </div>
-              {error && (
-                <div className="error-notice">
-                  <IconAlertCircle size={18} /> {error}
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Cargando */}
-          {(loading || searching) && (
-            <div className="state-card">
-              <div className="state-icon">
-                <div className="loading-pulse"><IconDatabase size={24} /></div>
-              </div>
-              <h2>Consultando Blockchain...</h2>
-              <p>Verificando información en la red Ethereum</p>
+          {/* 2. MANEJO DE ESTADOS (ERROR Y CARGA) */}
+          {error && (
+            <div className="error-notice">
+              <IconAlertCircle size={16} /> {error}
             </div>
           )}
 
-          {/* Múltiples resultados */}
-          {!loading && !searching && multipleResults.length > 1 && (
-            <>
-              <div className="multi-header">
-                Se encontraron {multipleResults.length} títulos — Seleccione uno para ver el detalle completo
+          {searching && (
+            <div className="state-card">
+              <div className="state-icon">
+                <div className="loading-pulse"><IconBlockchain size={32} /></div>
               </div>
+              <h2>Consultando Red</h2>
+              <p>Accediendo al registro inmutable en Sepolia...</p>
+            </div>
+          )}
+
+          {/* 3. RESULTADOS MÚLTIPLES (Si una cédula tiene varios títulos) */}
+          {multipleResults.length > 0 && !property && (
+            <div className="multi-container">
+              <h3 className="multi-header">Propiedades encontradas ({multipleResults.length})</h3>
               {multipleResults.map(p => (
                 <PropertySummaryCard key={p.id} prop={p} onSelect={loadPropertyById} />
               ))}
-            </>
+            </div>
           )}
 
-          {/* Título único — detalle completo */}
-          {!loading && !searching && property && (
-            <>
-              {/* Botón volver a lista si hay múltiples */}
-              {multipleResults.length > 1 && (
-                <button className="btn btn-outline" style={{ marginBottom: 16 }}
-                  onClick={() => setProperty(null)}>
-                  <IconArrowLeft /> Ver todos los títulos
-                </button>
-              )}
-
-              {/* Banner estado */}
-              <div className="cert-card" style={{ marginBottom: 24 }}>
-                <div className={`status-banner ${property.isVerified ? 'verified' : 'pending'}`}>
-                  <div className="status-banner-icon">
-                    {property.isVerified ? <IconCheck size={24} /> : <IconClock size={24} />}
-                  </div>
-                  <div className="status-banner-text">
-                    <h2>{property.isVerified ? 'Título Verificado en Blockchain' : 'Pendiente de Verificación Oficial'}</h2>
-                    <div className="matricula-display">{property.matricula}</div>
-                    <p style={{ marginTop: 6 }}>Contrato: {CONTRACT_ADDRESS.slice(0,12)}...{CONTRACT_ADDRESS.slice(-10)}</p>
-                  </div>
+          {/* 4. FICHA TÉCNICA DEL TÍTULO (Cuando ya hay uno seleccionado) */}
+          {property && !searching && (
+            <div className="animate-fade-in">
+              <div className={`status-banner ${property.isVerified ? 'verified' : 'pending'}`}>
+                <div className="status-banner-icon">
+                  {property.isVerified ? <IconCheck size={28} /> : <IconClock size={28} />}
+                </div>
+                <div className="status-banner-text">
+                  <h2>{property.isVerified ? 'Título Verificado' : 'Título en Proceso'}</h2>
+                  <div className="matricula-display">{property.matricula}</div>
                 </div>
               </div>
 
-              {/* Info título */}
               <div className="cert-card">
-                <div className="cert-section-header"><IconFile size={16} /> Información del Título</div>
+                <div className="cert-section-header"><IconFile size={14} /> Datos Técnicos</div>
                 <div className="cert-body">
-                  {[
-                    ['Matrícula',          property.matricula],
-                    ['Estado',             <span className={`badge ${property.isVerified ? 'badge-verified' : 'badge-pending'}`}>
-                                             {property.isVerified ? <><IconCheck size={12}/> Verificado</> : <><IconClock size={12}/> Pendiente</>}
-                                           </span>],
-                    ['Parcela',            property.parcel],
-                    ['Superficie',         `${property.area} m²`],
-                    ['Distrito Catastral', property.district || 'No especificado'],
-                    ['Ubicación',          property.propertyLocation || 'No especificada'],
-                    ['Fecha de Registro',  property.registrationDate || property.timestamp],
-                    ['Timestamp Blockchain', property.timestamp],
-                  ].map(([k, v]) => (
-                    <div className="cert-row" key={k}>
-                      <span className="cert-key">{k}</span>
-                      <span className="cert-val">{v}</span>
-                    </div>
-                  ))}
+                  <div className="cert-row"><span className="cert-key">Matrícula</span><span className="cert-val">{property.matricula}</span></div>
+                  <div className="cert-row"><span className="cert-key">Parcela / Solar</span><span className="cert-val">{property.parcel}</span></div>
+                  <div className="cert-row"><span className="cert-key">Superficie</span><span className="cert-val">{property.area} m²</span></div>
+                  <div className="cert-row"><span className="cert-key">Ubicación</span><span className="cert-val">{property.propertyLocation}</span></div>
                 </div>
-              </div>
 
-              {/* Propietario */}
-              <div className="cert-card">
-                <div className="cert-section-header"><IconUser size={16} /> Propietario Actual</div>
+                <div className="cert-section-header"><IconUser size={14} /> Titularidad Actual</div>
                 <div className="cert-body">
-                  {[
-                    ['Nombre',       <strong>{property.ownerName}</strong>],
-                    ['Cédula',       property.ownerId],
-                    ['Nacionalidad', property.nationality || 'Dominicana'],
-                  ].map(([k, v]) => (
-                    <div className="cert-row" key={k}>
-                      <span className="cert-key">{k}</span>
-                      <span className="cert-val">{v}</span>
-                    </div>
-                  ))}
+                  <div className="cert-row"><span className="cert-key">Nombre Completo</span><span className="cert-val">{property.ownerName}</span></div>
+                  <div className="cert-row"><span className="cert-key">Identificación</span><span className="cert-val">{property.ownerId}</span></div>
                 </div>
               </div>
 
-              {/* Historial */}
-              {history.length > 0 && (
-                <div className="cert-card">
-                  <div className="cert-section-header"><IconHistory size={16} /> Historial de Propietarios ({history.length})</div>
-                  <div className="history-list">
-                    {history.map((h, i) => (
-                      <div className="history-item" key={i}>
-                        <div className={`history-dot${h.isFirst ? ' first' : ''}`} />
-                        <div className="history-content">
-                          <div className="history-name">{h.ownerName}</div>
-                          <div className="history-meta">Cédula: {h.ownerId} &nbsp;|&nbsp; {h.timestamp}</div>
-                          {h.note && <div className="history-note">{h.note}</div>}
-                        </div>
-                        {h.isFirst && <span className="badge badge-verified" style={{ alignSelf: 'flex-start' }}>Registro inicial</span>}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
+<div className="actions-panel" style={{ textAlign: 'center' }}>
+  <div style={{ maxWidth: '500px', margin: '0 auto' }}>
+    <h3 style={{ color: 'var(--azul)', marginBottom: '10px', fontSize: '18px' }}>Documentación Original</h3>
+    <p style={{ fontSize: '13px', color: 'var(--gris-texto)', lineHeight: '1.5' }}>
+      Este registro cuenta con un respaldo digital almacenado de forma descentralizada en IPFS (InterPlanetary File System).
+    </p>
+  </div>
 
-              {/* IPFS */}
-              {property.ipfsHash && (
-                <div className="cert-card">
-                  <div className="cert-section-header"><IconDatabase size={16} /> Documento Digital (IPFS)</div>
-                  <div className="cert-body" style={{ paddingTop: 16, paddingBottom: 16 }}>
-                    <p style={{ fontSize: 13.5, color: 'var(--gris-texto)', marginBottom: 12 }}>
-                      El documento original está almacenado en IPFS (almacenamiento descentralizado e inmutable).
-                    </p>
-                    <a href={property.ipfsUrl} target="_blank" rel="noopener noreferrer" className="ipfs-link">
-                      <IconLink size={14} /> Ver documento original en IPFS
-                    </a>
-                    <p className="hash-text">Hash IPFS: {property.ipfsHash}</p>
-                  </div>
-                </div>
-              )}
+  <div style={{ 
+  display: 'flex', 
+  justifyContent: 'center', 
+  alignItems: 'center', 
+  gap: '20px', 
+  marginTop: '25px',
+  flexWrap: 'wrap'
+}}>
+  <a 
+    href={property.ipfsUrl} 
+    target="_blank" 
+    rel="noreferrer" 
+    style={{ 
+      backgroundColor: '#28a745',
+      color: 'white',
+      padding: '10px 20px',
+      borderRadius: '4px',
+      textDecoration: 'none',
+      display: 'inline-flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: '8px',
+      fontSize: '13px',
+      fontWeight: '600',
+      lineHeight: '1.2',           // ← misma altura de línea
+      minHeight: '40px',           // ← altura mínima igual para ambos
+      boxSizing: 'border-box'
+    }}
+  >
+    <IconLink size={14} /> Ver Original en IPFS
+  </a>
 
-              {/* QR + Acciones */}
-              <div className="actions-panel">
-                {qrCodeUrl && (
-                  <div className="qr-box">
-                    <img src={qrCodeUrl} alt="QR" style={{ width: 140, height: 140 }} />
-                    <small>Código QR de verificación</small>
-                  </div>
-                )}
-                <div className="actions-text">
-                  <h3>Verificación Oficial</h3>
-                  <p>Este certificado ha sido registrado de forma permanente e inmutable en la Blockchain de Ethereum. La matrícula <strong>{property.matricula}</strong> es única e irrepetible.</p>
-                </div>
-                <div className="actions-btns">
-                  <button onClick={downloadCertificate} className="btn btn-success">
-                    <IconDownload /> Descargar Certificado
-                  </button>
-                  <Link to="/" className="btn btn-outline">
-                    <IconArrowLeft /> Volver al inicio
-                  </Link>
-                </div>
-              </div>
-            </>
+  <button 
+    onClick={downloadCertificate} 
+    style={{ 
+      backgroundColor: '#002D6E',
+      color: 'white',
+      padding: '10px 20px',
+      border: 'none',
+      borderRadius: '4px',
+      cursor: 'pointer',
+      display: 'inline-flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: '8px',
+      fontSize: '13px',
+      fontWeight: '600',
+      lineHeight: '1.2',           // ← misma altura de línea
+      minHeight: '40px',           // ← altura mínima igual para ambos
+      boxSizing: 'border-box'
+    }}
+  >
+    <IconDownload size={16} /> Descargar Certificado PDF
+  </button>
+</div>
+</div>
+</div>
+            
           )}
         </main>
 
         <footer className="gov-footer">
           <div className="gov-footer-items">
-            <div className="gov-footer-item"><IconShield size={13} /> Blockchain Sepolia</div>
-            <div className="gov-footer-item"><IconDatabase size={13} /> IPFS Descentralizado</div>
-            <div className="gov-footer-item"><IconLink size={13} /> Verificación por QR</div>
+            <div className="gov-footer-item"><IconShield /> Registros inmutables en Blockchain Sepolia</div>
+            <div className="gov-footer-item"><IconDatabase /> Documentos en IPFS descentralizado</div>
+            <div className="gov-footer-item"><IconLink /> Verificación mediante código QR</div>
           </div>
-          <p>Jurisdicción Inmobiliaria — República Dominicana — {new Date().getFullYear()}</p>
+          <p>© 2026 Jurisdicción Inmobiliaria - República Dominicana</p>
         </footer>
       </div>
     </>

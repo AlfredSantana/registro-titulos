@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Certificado de Título #${id}</title>
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background-color: #525659;
+      display: flex;
+      justify-content: center;
+      padding: 20px;
+      font-family: "Times New Roman", Times, serif;
+    }
+    .certificate-container {
+      width: 794px;
+      height: 1123px;
+      background-color: white;
+      background-image: url('/fondo_de_tituloa4.png');
+      background-size: 100% 100%;
+      background-repeat: no-repeat;
+      background-position: center;
+      border: none;
+      outline: none;
+      padding: 60px;
+      box-sizing: border-box;
+      position: relative;
+      box-shadow: 0 0 20px rgba(0,0,0,0.5);
+    }
+    .inner-content {
+      width: 95%;
+      height: 100%;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+      z-index: 2;
+    }
+    .title-main {
+      width: 100%;
+      text-align: center;
+      color: #0076c2;
+      font-weight: bold;
+      font-size: 26px;
+      letter-spacing: 2px;
+      margin-top: 10px;
+      margin-bottom: 20px;
+    }
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 20px;
+      margin-top: 20px;
+    }
+    .header-logos {
+      display: flex;
+      gap: 80px;
+      align-items: center;
+    }
+    .logo-img { width: 70px; height: auto; }
+    .svg-icon { width: 60px; height: 60px; color: #d32f2f; }
+    .registry-text {
+      font-weight: bold;
+      font-size: 18px;
+      margin-top: 10px;
+      font-family: "Times New Roman", Times, serif;
+    }
+    .registration-box { width: 250px; }
+    .input-row { display: flex; align-items: center; margin-bottom: 5px; }
+    .input-row label {
+      font-size: 11px; font-weight: bold; width: 65px;
+      font-family: Arial, sans-serif;
+    }
+    .field-value {
+      flex-grow: 1;
+      height: 22px;
+      border: 1px solid #333;
+      background: rgba(255,255,255,0.85);
+      padding: 0 5px;
+      font-size: 11px;
+      font-family: Arial, sans-serif;
+      display: flex;
+      align-items: center;
+      font-weight: 600;
+      color: #000;
+    }
+    .main-body {
+      border: 1px solid #333;
+      height: 480px;
+      margin-top: 30px;
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      align-items: center;
+      padding: 30px;
+      box-sizing: border-box;
+      background: rgba(255,255,255,0.4);
+    }
+    .legal-content {
+      text-align: justify;
+      font-size: 14px;
+      line-height: 1.7;
+      color: #000;
+    }
+    .signature-area { text-align: center; }
+    .signature-img-container {
+      width: 180px; height: 60px;
+      margin: 0 auto;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .signature-png { max-width: 100%; max-height: 100%; object-fit: contain; }
+    .registrar-title {
+      border-top: 1px solid #000;
+      padding-top: 5px;
+      width: 250px;
+      font-size: 12px;
+      text-align: center;
+    }
+    .seal-left { position: absolute; bottom: 20px; left: 20px; width: 90px; opacity: 0.8; }
+    .seal-right { position: absolute; bottom: 100px; right: 30px; width: 100px; opacity: 0.6; }
+    .footer-info-box {
+      border: 1px solid #333;
+      margin-top: 15px;
+      padding: 8px 15px;
+      background: rgba(255,255,255,0.7);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .blockchain-info { font-size: 10px; line-height: 1.5; font-family: Arial, sans-serif; }
+    .qr-box { text-align: center; width: 90px; }
+    .qr-box img { width: 65px; height: 65px; }
+    .footer-validation {
+      margin-top: 16px;
+      text-align: center;
+      font-size: 9px;
+      color: #444;
+      font-family: Arial, sans-serif;
+    }
+     .demo-text {
+            text-align: center;
+            font-weight: bold;
+            color: #0076c2;
+            font-size: 22px;
+            margin-top: 20px;
+            letter-spacing: 5px;
+        }
+
+  </style>
+</head>
+<body>
+  <div class="certificate-container">
+    <div class="inner-content">
+
+      <div class="title-main">CERTIFICADO DE TÍTULO</div>
+
+      <div class="header">
+        <div style="display:flex;flex-direction:column;">
+          <div class="header-logos">
+            <img src="/escudo.png" alt="Escudo Nacional" class="logo-img">
+            <div class="svg-icon">
+              <svg width="100%" height="100%" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M12 2L2 7L12 12L22 7L12 2Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M2 17L12 22L22 17" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M2 12L12 17L22 12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </div>
+          </div>
+          <div class="registry-text">REGISTRO DE TÍTULOS</div>
+        </div>
+
+        <div class="registration-box">
+          <div class="input-row">
+            <label>Matrícula</label>
+            <div class="field-value">${matricula || `${new Date().getFullYear()}-${String(id).padStart(6, '0')}`}</div>
+          </div>
+          <div class="input-row">
+            <label>Provincia</label>
+            <div class="field-value">${provincia || 'SANTO DOMINGO DE GUZMÁN'}</div>
+          </div>
+          <div class="input-row">
+            <label>Municipio</label>
+            <div class="field-value">${municipio || 'SANTO DOMINGO, D.N.'}</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="main-body">
+        <div class="legal-content">
+          En virtud de la Ley y en nombre de la República se declara
+          <strong>TITULAR DEL DERECHO DE PROPIEDAD</strong> a
+          <strong>${ownerName || 'N/A'}</strong>,
+          de nacionalidad <strong>${nationality || 'Dominicana'}</strong>,
+          mayor de edad, Cédula de Identidad No. <strong>${ownerId || 'N/A'}</strong>,
+          estado civil <strong>Soltero(a)</strong>, sobre el inmueble identificado como
+          <strong>${parcel || 'N/A'}</strong>,
+          que tiene una superficie de
+          <strong>${area || '0'} metros cuadrados (${area || '0'} m²)</strong>,
+          matrícula <strong>${matricula || `${new Date().getFullYear()}-${String(id).padStart(6, '0')}`}</strong>,
+          ubicado en <strong>${propertyLocation || 'Santo Domingo de Guzmán, Distrito Nacional'}</strong>.
+          <br/><br/>
+          <strong>Distrito Catastral:</strong> ${district || 'N/A'} &nbsp;|&nbsp;
+          <strong>Fecha de Registro:</strong> ${registrationDate || new Date().toLocaleDateString('es-DO')}
+        </div>
+
+        <div class="signature-area">
+          <div class="signature-img-container">
+            <img src="/signature.png" alt="Firma" class="signature-png">
+          </div>
+          <div class="registrar-title">${REGISTRADOR_TITULO}</div>
+          <p style="margin:5px 0 0 0;font-size:13px;"><strong>${REGISTRADOR_NOMBRE}</strong></p>
+        </div>
+
+        <div class="seal-left"><img src="/sello1.png" style="width:100%;"></div>
+        <div class="seal-right"><img src="/sello2.png" style="width:100%;"></div>
+      </div>
+
+      <div class="footer-info-box">
+        <div class="blockchain-info">
+          <div style="display:flex;align-items:center;gap:5px;margin-bottom:3px;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#0076c2" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+              <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+            </svg>
+            <strong style="color:#0076c2;">INFORMACIÓN DE BLOCKCHAIN</strong>
+          </div>
+          ID Blockchain: <strong>#${id}</strong> | Hash IPFS: <span class="hash-text">${shortHash}</span><br>
+Red: Sepolia Testnet | Contrato: <span class="hash-text">${shortContract}</span><br>
+          Tipo: <strong>${tipo}</strong>
+        </div>
+
+        <div class="qr-box">
+          ${qrDataUrl
+            ? `<img src="${qrDataUrl}" alt="QR Code">`
+            : `<div style="width:65px;height:65px;border:1px solid #ccc;display:flex;align-items:center;justify-content:center;font-size:8px;">QR</div>`
+          }
+          <p style="font-size:7px;margin-top:3px;font-weight:bold;">Validar Blockchain</p>
+        </div>
+      </div>
+
+       <div class="demo-text">DOCUMENTO DEMOSTRATIVO</div>
+
+      <div class="footer-validation">
+        <p>Documento validado en Blockchain de Ethereum (Red Sepolia) | Inmutable y verificable públicamente</p>
+        <p><strong>${verUrl}</strong></p>
+      </div>
+
+    </div>
+  </div>
+</body>
+</html>

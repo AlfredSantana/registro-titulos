@@ -3,11 +3,17 @@ import { ethers } from 'ethers';
 import axios from 'axios';
 import contractABI from './contractABI.json';
 import QRCode from 'qrcode';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
 
 const CONTRACT_ADDRESS = "0xC5117F33935DcFEB2Ef59aa8743F12F5E3b8a8c9";
 const PINATA_API_KEY = "cf5e544fb393d2c00a40";
 const PINATA_SECRET_KEY = "9fb8aa518f53c9e4b999ef9ab795902a18ed17e30880d4b1c909b1cc54ff3781";
 const SEPOLIA_RPC = 'https://ethereum-sepolia.publicnode.com';
+
+// Registrador fijo — no varía
+const REGISTRADOR_NOMBRE = "Arianny Cristina Batista";
+const REGISTRADOR_TITULO = "Registrador de Títulos Adscrito";
 
 // ─── SVG Icons ────────────────────────────────────────────────────────────────
 const IconWallet = () => (
@@ -132,8 +138,6 @@ const IconHash = () => (
 );
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-
-// Parsear resultado del contrato (ahora con matricula en index 1)
 const parseProperty = (result) => {
   let metadata = {};
   try { metadata = JSON.parse(result[9]); } catch (e) { metadata = {}; }
@@ -151,27 +155,347 @@ const parseProperty = (result) => {
     district:         metadata.district         || '',
     propertyLocation: metadata.location         || '',
     registrationDate: metadata.registrationDate || '',
+    provincia:        metadata.provincia        || '',
+    municipio:        metadata.municipio        || '',
     ipfsUrl: result[6] ? `https://gateway.pinata.cloud/ipfs/${result[6]}` : ''
   };
 };
 
 const generateQR = async (id) => {
   try {
-    return await QRCode.toDataURL(`${window.location.origin}/verify/${id}`, {
+    return await QRCode.toDataURL(`http://localhost:5173/verify/${id}`, {
       errorCorrectionLevel: 'H', margin: 1, width: 200
     });
   } catch (e) { return ''; }
 };
 
+// ─── Generador HTML del Certificado (idéntico al diseño oficial) ──────────────
 /**
- * Calcula el SHA-256 de un File localmente (sin subir nada).
- * Se usa para verificar si el documento ya está en blockchain antes de subirlo a Pinata.
+ * Genera el HTML del certificado oficial.
+ * IMPORTANTE: ipfsHash ya debe tener el valor real cuando se llama esta función.
  */
-const fileToSha256 = async (file) => {
-  const buffer = await file.arrayBuffer();
-  const hashBuffer = await crypto.subtle.digest('SHA-256', buffer);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+const generarHTMLCertificado = (datos, qrDataUrl, tipo) => {
+  const {
+    id, matricula, ownerName, ownerId, nationality, parcel, area,
+    district, propertyLocation, registrationDate, provincia, municipio, ipfsHash
+  } = datos;
+
+  const verUrl = `http://localhost:5173/verify/${id}`;
+  const shortHash = ipfsHash ? `${ipfsHash.slice(0, 20)}...` : 'N/A';
+  const shortContract = `${CONTRACT_ADDRESS.slice(0, 20)}...`;
+
+  return `<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Certificado de Título #${id}</title>
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background-color: #525659;
+      display: flex;
+      justify-content: center;
+      padding: 20px;
+      font-family: "Times New Roman", Times, serif;
+    }
+    .certificate-container {
+      width: 794px;
+      height: 1123px;
+      background-color: white;
+      background-image: url('/fondo_de_tituloa4.png');
+      background-size: 100% 100%;
+      background-repeat: no-repeat;
+      background-position: center;
+      border: none;
+      outline: none;
+      padding: 60px;
+      box-sizing: border-box;
+      position: relative;
+      box-shadow: 0 0 20px rgba(0,0,0,0.5);
+    }
+    .inner-content {
+      width: 95%;
+      height: 100%;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+      z-index: 2;
+    }
+    .title-main {
+      width: 100%;
+      text-align: center;
+      color: #0076c2;
+      font-weight: bold;
+      font-size: 26px;
+      letter-spacing: 2px;
+      margin-top: 10px;
+      margin-bottom: 20px;
+    }
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 20px;
+      margin-top: 20px;
+    }
+    .header-logos {
+      display: flex;
+      gap: 80px;
+      align-items: center;
+    }
+    .logo-img { width: 70px; height: auto; }
+    .svg-icon { width: 60px; height: 60px; color: #d32f2f; }
+    .registry-text {
+      font-weight: bold;
+      font-size: 18px;
+      margin-top: 10px;
+      font-family: "Times New Roman", Times, serif;
+    }
+    .registration-box { width: 250px; }
+    .input-row { display: flex; align-items: center; margin-bottom: 5px; }
+    .input-row label {
+      font-size: 11px; font-weight: bold; width: 65px;
+      font-family: Arial, sans-serif;
+    }
+    .field-value {
+      flex-grow: 1;
+      height: 22px;
+      border: 1px solid #333;
+      background: rgba(255,255,255,0.85);
+      padding: 0 5px;
+      font-size: 11px;
+      font-family: Arial, sans-serif;
+      display: flex;
+      align-items: center;
+      font-weight: 600;
+      color: #000;
+    }
+    .main-body {
+      border: 1px solid #333;
+      height: 480px;
+      margin-top: 30px;
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      align-items: center;
+      padding: 30px;
+      box-sizing: border-box;
+      background: rgba(255,255,255,0.4);
+    }
+    .legal-content {
+      text-align: justify;
+      font-size: 14px;
+      line-height: 1.7;
+      color: #000;
+    }
+    .signature-area { text-align: center; }
+    .signature-img-container {
+      width: 180px; height: 60px;
+      margin: 0 auto;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .signature-png { max-width: 100%; max-height: 100%; object-fit: contain; }
+    .registrar-title {
+      border-top: 1px solid #000;
+      padding-top: 5px;
+      width: 250px;
+      font-size: 12px;
+      text-align: center;
+    }
+    .seal-left { position: absolute; bottom: 20px; left: 20px; width: 90px; opacity: 0.8; }
+    .seal-right { position: absolute; bottom: 100px; right: 30px; width: 100px; opacity: 0.6; }
+    .footer-info-box {
+      border: 1px solid #333;
+      margin-top: 15px;
+      padding: 8px 15px;
+      background: rgba(255,255,255,0.7);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .blockchain-info { font-size: 10px; line-height: 1.5; font-family: Arial, sans-serif; }
+    .qr-box { text-align: center; width: 90px; }
+    .qr-box img { width: 65px; height: 65px; }
+    .footer-validation {
+      margin-top: 16px;
+      text-align: center;
+      font-size: 9px;
+      color: #444;
+      font-family: Arial, sans-serif;
+    }
+
+    .hash-text {
+  font-family: monospace;
+  font-size: 9px;
+  background: none !important; /* Asegura que no haya fondo */
+  color: #333;
+  padding: 0;
+}
+     .demo-text {
+            text-align: center;
+            font-weight: bold;
+            color: #0076c2;
+            font-size: 22px;
+            margin-top: 20px;
+            letter-spacing: 5px;
+        }
+
+  </style>
+</head>
+<body>
+  <div class="certificate-container">
+    <div class="inner-content">
+
+      <div class="title-main">CERTIFICADO DE TÍTULO</div>
+
+      <div class="header">
+        <div style="display:flex;flex-direction:column;">
+          <div class="header-logos">
+            <img src="/escudo.png" alt="Escudo Nacional" class="logo-img">
+            <div class="svg-icon">
+              <svg width="100%" height="100%" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M12 2L2 7L12 12L22 7L12 2Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M2 17L12 22L22 17" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M2 12L12 17L22 12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </div>
+          </div>
+          <div class="registry-text">REGISTRO DE TÍTULOS</div>
+        </div>
+
+        <div class="registration-box">
+          <div class="input-row">
+            <label>Matrícula</label>
+            <div class="field-value">${matricula || `${new Date().getFullYear()}-${String(id).padStart(6, '0')}`}</div>
+          </div>
+          <div class="input-row">
+            <label>Provincia</label>
+            <div class="field-value">${provincia || 'SANTO DOMINGO DE GUZMÁN'}</div>
+          </div>
+          <div class="input-row">
+            <label>Municipio</label>
+            <div class="field-value">${municipio || 'SANTO DOMINGO, D.N.'}</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="main-body">
+        <div class="legal-content">
+          En virtud de la Ley y en nombre de la República se declara
+          <strong>TITULAR DEL DERECHO DE PROPIEDAD</strong> a
+          <strong>${ownerName || 'N/A'}</strong>,
+          de nacionalidad <strong>${nationality || 'Dominicana'}</strong>,
+          mayor de edad, Cédula de Identidad No. <strong>${ownerId || 'N/A'}</strong>, sobre el inmueble identificado como
+          <strong>${parcel || 'N/A'}</strong>,
+          que tiene una superficie de
+          <strong>${area || '0'} metros cuadrados (${area || '0'} m²)</strong>,
+          matrícula <strong>${matricula || `${new Date().getFullYear()}-${String(id).padStart(6, '0')}`}</strong>,
+          ubicado en <strong>${propertyLocation || 'Santo Domingo de Guzmán, Distrito Nacional'}</strong>.
+          <br/><br/>
+          <strong>Distrito Catastral:</strong> ${district || 'N/A'} &nbsp;|&nbsp;
+          <strong>Fecha de Registro:</strong> ${registrationDate || new Date().toLocaleDateString('es-DO')}
+        </div>
+
+        <div class="signature-area">
+          <div class="signature-img-container">
+            <img src="/signature.png" alt="Firma" class="signature-png">
+          </div>
+          <div class="registrar-title">${REGISTRADOR_TITULO}</div>
+          <p style="margin:5px 0 0 0;font-size:13px;"><strong>${REGISTRADOR_NOMBRE}</strong></p>
+        </div>
+
+        <div class="seal-left"><img src="/sello1.png" style="width:100%;"></div>
+        <div class="seal-right"><img src="/sello2.png" style="width:100%;"></div>
+      </div>
+
+      <div class="footer-info-box">
+        <div class="blockchain-info">
+          <div style="display:flex;align-items:center;gap:5px;margin-bottom:3px;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#0076c2" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+              <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+            </svg>
+            <strong style="color:#0076c2;">INFORMACIÓN DE BLOCKCHAIN</strong>
+          </div>
+          ID Blockchain: <strong>#${id}</strong> | Hash IPFS: <span class="hash-text">${shortHash}</span><br>
+Red: Sepolia Testnet | Contrato: <span class="hash-text">${shortContract}</span><br>
+          Tipo: <strong>${tipo}</strong>
+        </div>
+
+        <div class="qr-box">
+          ${qrDataUrl
+            ? `<img src="${qrDataUrl}" alt="QR Code">`
+            : `<div style="width:65px;height:65px;border:1px solid #ccc;display:flex;align-items:center;justify-content:center;font-size:8px;">QR</div>`
+          }
+          <p style="font-size:7px;margin-top:3px;font-weight:bold;">Validar Blockchain</p>
+        </div>
+      </div>
+
+       <div class="demo-text">DOCUMENTO DEMOSTRATIVO</div>
+
+      <div class="footer-validation">
+        <p>Documento validado en Blockchain de Ethereum (Red Sepolia) | Inmutable y verificable públicamente</p>
+        <p><strong>${verUrl}</strong></p>
+      </div>
+
+    </div>
+  </div>
+</body>
+</html>`;
+};
+
+// ─── Convierte HTML → canvas → PDF → File y lo sube a Pinata ─────────────────
+const generarCertificadoPDF = async (datos, qrDataUrl, tipo, uploadToIPFS) => {
+  console.log("Generando certificado PDF para ID:", datos.id);
+
+  const htmlContent = generarHTMLCertificado(datos, qrDataUrl, tipo);
+
+  const containerId = `cert-${Date.now()}`;
+  const container = document.createElement('div');
+  container.id = containerId;
+  container.style.position = 'absolute';
+  container.style.left = '-9999px';
+  container.style.top = '-9999px';
+  container.innerHTML = htmlContent;
+  document.body.appendChild(container);
+
+  await new Promise(resolve => setTimeout(resolve, 150));
+
+  try {
+    const certEl = container.querySelector('.certificate-container');
+    if (!certEl) throw new Error("No se encontró .certificate-container");
+
+    const canvas = await html2canvas(certEl, {
+      scale: 2,
+      backgroundColor: '#ffffff',
+      logging: false,
+      useCORS: true,
+      allowTaint: false
+    });
+
+    const imgData = canvas.toDataURL('image/png');
+    const pdf = new jsPDF('p', 'mm', 'a4');
+    const imgProps = pdf.getImageProperties(imgData);
+    const pdfWidth = pdf.internal.pageSize.getWidth();
+    const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+    pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+
+    const pdfBlob = pdf.output('blob');
+    const file = new File([pdfBlob], `certificado_titulo_${datos.id}.pdf`, { type: 'application/pdf' });
+    console.log("📄 PDF creado, tamaño:", file.size, "bytes");
+
+    const hash = await uploadToIPFS(file);
+    console.log("✅ Certificado subido a IPFS:", hash);
+    return hash;
+  } catch (error) {
+    console.error("❌ Error generando PDF:", error);
+    return null;
+  } finally {
+    const el = document.getElementById(containerId);
+    if (el) document.body.removeChild(el);
+  }
 };
 
 // ─── ResultCard ───────────────────────────────────────────────────────────────
@@ -194,16 +518,18 @@ function ResultCard({ data, qrUrl, onVerify, showVerifyBtn }) {
       <div className="result-body">
         <div className="result-fields">
           {[
-            ['Matrícula',        data.matricula],
-            ['Propietario',      data.ownerName],
-            ['Cédula',           data.ownerId],
-            ['Nacionalidad',     data.nationality      || 'N/A'],
-            ['Ubicación',        data.propertyLocation || 'N/A'],
-            ['Distrito Catastral', data.district       || 'N/A'],
-            ['Parcela',          data.parcel],
-            ['Superficie',       `${data.area} m²`],
-            ['Fecha Registro',   data.registrationDate || 'N/A'],
-            ['Timestamp Blockchain', data.timestamp],
+            ['Matrícula',           data.matricula],
+            ['Propietario',         data.ownerName],
+            ['Cédula',              data.ownerId],
+            ['Nacionalidad',        data.nationality      || 'N/A'],
+            ['Provincia',           data.provincia        || 'N/A'],
+            ['Municipio',           data.municipio        || 'N/A'],
+            ['Ubicación',           data.propertyLocation || 'N/A'],
+            ['Distrito Catastral',  data.district         || 'N/A'],
+            ['Parcela',             data.parcel],
+            ['Superficie',          `${data.area} m²`],
+            ['Fecha Registro',      data.registrationDate || 'N/A'],
+            ['Timestamp Blockchain',data.timestamp],
           ].map(([k, v]) => (
             <div className="result-row" key={k}>
               <span className="result-key">{k}</span>
@@ -271,12 +597,10 @@ function PublicView({ contract }) {
         const id = await contract.getPropertyByMatricula(val);
         if (Number(id) === 0) { alert('Matrícula no encontrada.'); return; }
         await fetchById(Number(id));
-
       } else if (searchType === 'parcel') {
         const id = await contract.getPropertyByParcel(val);
         if (Number(id) === 0) { alert('Parcela no encontrada.'); return; }
         await fetchById(Number(id));
-
       } else if (searchType === 'ipfs') {
         const id = await contract.getPropertyByIpfsHash(val);
         if (Number(id) === 0) { alert('Hash IPFS no encontrado.'); return; }
@@ -342,43 +666,54 @@ function AuthorityPanel({ contract, setTotalProperties }) {
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [selectedFile, setSelectedFile] = useState(null);
-  const [ipfsWarning, setIpfsWarning] = useState(null); // advertencia duplicado IPFS
   const [operationType, setOperationType] = useState('new');
   const [propertyData, setPropertyData] = useState(null);
   const [propertyId, setPropertyId] = useState('');
   const [qrCodeUrl, setQrCodeUrl] = useState('');
   const [transferId, setTransferId] = useState('');
   const [transferData, setTransferData] = useState({ newOwnerName: '', newOwnerId: '', transferNote: '' });
+
+  // Estados para modales y notificaciones
+  const [showLoadingModal, setShowLoadingModal] = useState(false);
+  const [loadingMessage, setLoadingMessage] = useState('');
+  const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
+
+  // Mostrar notificación tipo toast
+const showToast = (message, type = 'success') => {
+  setToast({ show: true, message, type });
+  setTimeout(() => {
+    setToast({ show: false, message: '', type: 'success' });
+  }, 4000);
+};
+
+// Mostrar modal de carga con mensaje dinámico
+const showLoading = (message) => {
+  setLoadingMessage(message);
+  setShowLoadingModal(true);
+};
+
+const hideLoading = () => {
+  setShowLoadingModal(false);
+  setLoadingMessage('');
+};
+
+  // Registrador eliminado del formulario — es una constante del sistema
   const [formData, setFormData] = useState({
     ownerName: '', ownerId: '', nationality: 'Dominicana',
-    propertyLocation: '', district: '', parcel: '', area: '', registrationDate: ''
+    propertyLocation: '', district: '', parcel: '', area: '', registrationDate: '',
+    provincia: 'SANTO DOMINGO DE GUZMÁN',
+    municipio: 'SANTO DOMINGO, D.N.',
   });
 
-  const handleInputChange  = (e) => setFormData({ ...formData, [e.target.name]: e.target.value });
+  const handleInputChange = (e) => setFormData({ ...formData, [e.target.name]: e.target.value });
   const handleTransferChange = (e) => setTransferData({ ...transferData, [e.target.name]: e.target.value });
 
-  // Verificar duplicado IPFS al seleccionar archivo
-  const handleFileSelect = async (e) => {
+  const handleFileSelect = (e) => {
     const file = e.target.files[0];
-    if (!file) { setSelectedFile(null); setIpfsWarning(null); return; }
-    setSelectedFile(file);
-    setIpfsWarning(null);
-    try {
-      // Calcular SHA-256 local del archivo
-      const localHash = await fileToSha256(file);
-      // Verificar en Pinata si ya fue subido (por nombre de archivo en metadata)
-      // La verificación real es contra el contrato con el hash IPFS
-      // Nota: no podemos saber el hash IPFS antes de subirlo sin calcularlo con la API de Pinata.
-      // En cambio, verificamos si el nombre del archivo ya está en algún título.
-      // La verificación definitiva la hace el contrato al registrar.
-      // Aquí hacemos una advertencia visual basada en el SHA-256 local.
-      console.log('SHA-256 local del archivo:', localHash);
-      // Podríamos guardar un mapping local, pero lo más confiable es la validación del contrato.
-    } catch (err) {
-      console.error('Error calculando hash local:', err);
-    }
+    setSelectedFile(file || null);
   };
 
+  // ─── Subida a IPFS ────────────────────────────────────────────────────────
   const uploadToIPFS = async (file) => {
     try {
       setUploading(true);
@@ -398,104 +733,262 @@ function AuthorityPanel({ contract, setTotalProperties }) {
     } finally { setUploading(false); }
   };
 
-  const registerProperty = async (e) => {
-    e.preventDefault();
-    if (!formData.ownerName || !formData.ownerId || !formData.parcel || !formData.area) {
-      alert('Complete los campos obligatorios: Propietario, Cédula, Parcela y Superficie');
+  // ─── Registro de nueva propiedad ──────────────────────────────────────────
+const registerProperty = async (e) => {
+  e.preventDefault();
+  if (!contract) { 
+    showToast("Conecte su wallet primero", "error");
+    return; 
+  }
+  if (!formData.ownerName || !formData.ownerId || !formData.parcel || !formData.area) {
+    showToast('Complete los campos obligatorios: Propietario, Cédula, Parcela y Superficie', "error");
+    return;
+  }
+
+  try {
+    setLoading(true);
+    showLoading("Verificando datos del título...");
+
+    const totalActual = await contract.getTotalProperties();
+    const nuevoId = Number(totalActual) + 1;
+    
+    // 🔥 PRIMERO: Verificar si la parcela ya existe (simular transacción)
+    showLoading("Validando parcela en Blockchain...");
+    try {
+      // Llamada estática para verificar sin gastar gas
+      await contract.registerProperty.staticCall(
+        formData.ownerName,
+        formData.ownerId,
+        formData.parcel,
+        formData.area,
+        "0x", // hash temporal
+        "{}"  // metadata temporal
+      );
+    } catch (validationError) {
+      // Extraer el mensaje de error del contrato
+      let errorMessage = "Error de validación";
+      if (validationError.reason) {
+        errorMessage = validationError.reason;
+      } else if (validationError.message) {
+        const match = validationError.message.match(/reason="([^"]+)"/);
+        if (match) errorMessage = match[1];
+        else if (validationError.message.includes("parcela")) errorMessage = "Esta parcela ya se encuentra registrada en el sistema";
+      }
+      hideLoading();
+      showToast(errorMessage, "error");
       return;
     }
 
-    let ipfsHash = '';
+    // Si llegamos aquí, la parcela NO está duplicada
+    const qrUrlTemp = await generateQR(nuevoId);
+    const matriculaGenerada = `${new Date().getFullYear()}-${String(nuevoId).padStart(6, '0')}`;
 
-    if (selectedFile) {
-      // 1. Subir a Pinata primero para obtener el hash IPFS real
-      ipfsHash = await uploadToIPFS(selectedFile);
-      if (!ipfsHash) return;
+    const datosCert = {
+      id: nuevoId,
+      matricula: matriculaGenerada,
+      ownerName: formData.ownerName,
+      ownerId: formData.ownerId,
+      nationality: formData.nationality,
+      parcel: formData.parcel,
+      area: formData.area,
+      district: formData.district,
+      propertyLocation: formData.propertyLocation,
+      registrationDate: formData.registrationDate,
+      provincia: formData.provincia,
+      municipio: formData.municipio,
+      ipfsHash: ''
+    };
 
-      // 2. Verificar en el contrato si ese hash IPFS ya está registrado
-      try {
-        const alreadyRegistered = await contract.isIpfsHashRegistered(ipfsHash);
-        if (alreadyRegistered) {
-          const existingId = await contract.getPropertyByIpfsHash(ipfsHash);
-          // Obtener matrícula del título existente
-          let matriculaExistente = `#${existingId}`;
-          try {
-            const existingProp = await contract.getProperty(existingId);
-            matriculaExistente = existingProp[1]; // matricula en index 1
-          } catch (e) {}
+    // 🔥 AHORA SÍ: Generar certificado y subir a IPFS (solo si la validación pasó)
+    showLoading("Generando certificado digital y subiendo a IPFS...");
+    const ipfsHashFinal = await generarCertificadoPDF(datosCert, qrUrlTemp, 'REGISTRO INICIAL', uploadToIPFS);
 
-          setIpfsWarning({
-            type: 'error',
-            message: `Este documento ya está registrado en el título ${matriculaExistente}. No se puede usar el mismo documento para un registro nuevo.`
-          });
-          return; // Bloquear el registro
-        }
-      } catch (err) {
-        console.error('Error verificando IPFS hash:', err);
-      }
+    if (!ipfsHashFinal) {
+      hideLoading();
+      showToast('Error al generar o subir el certificado. Intente de nuevo.', "error");
+      return;
     }
+
+    datosCert.ipfsHash = ipfsHashFinal;
 
     const metadata = JSON.stringify({
-      operationType: 'new', nationality: formData.nationality,
-      district: formData.district, location: formData.propertyLocation,
-      registrationDate: formData.registrationDate, previousOwner: '', qrCode: ''
+      operationType: 'new',
+      nationality: formData.nationality,
+      district: formData.district,
+      location: formData.propertyLocation,
+      registrationDate: formData.registrationDate,
+      provincia: formData.provincia,
+      municipio: formData.municipio,
+      registrador: REGISTRADOR_NOMBRE,
+      previousOwner: '',
+      qrCode: qrUrlTemp,
+      certificadoHash: ipfsHashFinal
     });
 
-    try {
-      setLoading(true);
-      const tx = await contract.registerProperty(
-        formData.ownerName, formData.ownerId, formData.parcel, formData.area, ipfsHash, metadata
-      );
-      await tx.wait();
+    showLoading("Registrando en Blockchain (esto puede tomar unos segundos)...");
+    const tx = await contract.registerProperty(
+      formData.ownerName,
+      formData.ownerId,
+      formData.parcel,
+      formData.area,
+      ipfsHashFinal,
+      metadata
+    );
+    await tx.wait();
 
-      const total = await contract.getTotalProperties();
-      setTotalProperties(Number(total));
-      setQrCodeUrl(await generateQR(total));
-      setIpfsWarning(null);
+    hideLoading();
+    showToast('¡Título registrado exitosamente en la Blockchain!', "success");
 
-      // Obtener la matrícula generada
-      const newProp = await contract.getProperty(Number(total));
-      const mat = newProp[1];
-      alert(`¡Título registrado exitosamente!\nMatrícula asignada: ${mat}`);
+    const total = await contract.getTotalProperties();
+    setTotalProperties(Number(total));
+    setQrCodeUrl(qrUrlTemp);
 
-      setFormData({ ownerName: '', ownerId: '', nationality: 'Dominicana', propertyLocation: '', district: '', parcel: '', area: '', registrationDate: '' });
-      setSelectedFile(null);
-    } catch (error) {
-      if (error.message.includes('ya se encuentra registrada') || error.message.includes('already registered')) {
-        alert('Esta parcela ya se encuentra registrada. No se permiten duplicados.');
-      } else if (error.message.includes('ya esta asociado')) {
-        alert('Este documento IPFS ya está asociado a otro título registrado.');
-      } else {
-        alert('Error al registrar: ' + error.message);
-      }
-    } finally { setLoading(false); }
-  };
+    setFormData({
+      ownerName: '', ownerId: '', nationality: 'Dominicana',
+      propertyLocation: '', district: '', parcel: '', area: '', registrationDate: '',
+      provincia: 'SANTO DOMINGO DE GUZMÁN',
+      municipio: 'SANTO DOMINGO, D.N.',
+    });
+    setSelectedFile(null);
 
-  const transferProperty = async (e) => {
-    e.preventDefault();
-    if (!transferId || transferId <= 0) { alert('Ingrese un ID de título válido'); return; }
-    if (!transferData.newOwnerName || !transferData.newOwnerId) {
-      alert('Complete el nombre y cédula del nuevo propietario');
+} catch (error) {
+  hideLoading();
+  console.error("Error detallado:", error);
+  
+  // Extraer mensaje de error legible
+  let errorMessage = "Error al registrar el título";
+  
+  // Caso 1: Usuario rechazó la transacción en MetaMask
+  if (error.code === 'ACTION_REJECTED' || 
+      error.code === 4001 || 
+      error.message?.includes('user rejected') ||
+      error.message?.includes('User denied') ||
+      error.message?.includes('rejected') ||
+      error.error?.message?.includes('reject')) {
+    errorMessage = "Transacción rechazada en MetaMask";
+  }
+  // Caso 2: Error del contrato con reason
+  else if (error.reason) {
+    errorMessage = error.reason;
+  }
+  // Caso 3: Error con reason dentro del message
+  else if (error.message) {
+    const match = error.message.match(/reason="([^"]+)"/);
+    if (match) {
+      errorMessage = match[1];
+    } else if (error.message.includes("insufficient funds")) {
+      errorMessage = "Saldo insuficiente en la wallet";
+    } else if (error.message.includes("gas")) {
+      errorMessage = "Error con el gas de la transacción";
+    } else if (error.message.includes("already registered")) {
+      errorMessage = "Esta parcela ya se encuentra registrada en el sistema";
+    }
+  }
+  // Caso 4: Error de conexión
+  else if (error.code === 'NETWORK_ERROR') {
+    errorMessage = "Error de conexión con la red. Verifique su conexión a Internet.";
+  }
+  
+  showToast(errorMessage, "error");
+}
+};
+
+  // ─── Traspaso ─────────────────────────────────────────────────────────────
+const transferProperty = async (e) => {
+  e.preventDefault();
+  if (!transferId || transferId <= 0) { 
+    showToast('Ingrese un ID de título válido', "error"); 
+    return; 
+  }
+  if (!transferData.newOwnerName || !transferData.newOwnerId) {
+    showToast('Complete el nombre y cédula del nuevo propietario', "error");
+    return;
+  }
+
+  try {
+    setLoading(true);
+    showLoading("Preparando traspaso...");
+
+    const propiedadActual = await contract.getProperty(transferId);
+    let metadataActual = {};
+    try { metadataActual = JSON.parse(propiedadActual[9]); } catch(e) {}
+
+    const nuevoQrUrl = await generateQR(transferId);
+    const matriculaActual = propiedadActual[1];
+
+    const datosNuevoCert = {
+      id: transferId,
+      matricula: matriculaActual,
+      ownerName: transferData.newOwnerName,
+      ownerId: transferData.newOwnerId,
+      nationality: metadataActual.nationality || 'Dominicana',
+      parcel: propiedadActual[4],
+      area: propiedadActual[5],
+      district: metadataActual.district || '',
+      propertyLocation: metadataActual.location || '',
+      registrationDate: metadataActual.registrationDate || new Date().toISOString().split('T')[0],
+      provincia: metadataActual.provincia || 'SANTO DOMINGO DE GUZMÁN',
+      municipio: metadataActual.municipio || 'SANTO DOMINGO, D.N.',
+      ipfsHash: ''
+    };
+
+    // 🔥 SOLO UNA LLAMADA: Generar certificado y subir a IPFS
+    showLoading("Generando nuevo certificado digital...");
+    const nuevoIpfsHash = await generarCertificadoPDF(datosNuevoCert, nuevoQrUrl, 'TRASPASO', uploadToIPFS);
+    
+    if (!nuevoIpfsHash) {
+      hideLoading();
+      showToast('Error al generar el certificado de traspaso', "error");
       return;
     }
-    try {
-      setLoading(true);
-      const meta = JSON.stringify({
-        fechaTraspaso: new Date().toISOString(),
-        nota: transferData.transferNote || 'Traspaso de propiedad'
-      });
-      const tx = await contract.transferProperty(
-        transferId, transferData.newOwnerName, transferData.newOwnerId, meta
-      );
-      await tx.wait();
-      alert('¡Traspaso registrado exitosamente en la Blockchain!');
-      setTransferData({ newOwnerName: '', newOwnerId: '', transferNote: '' });
-      setTransferId('');
-    } catch (error) {
-      alert('Error al registrar traspaso: ' + error.message);
-    } finally { setLoading(false); }
-  };
 
+    const metaTraspaso = JSON.stringify({
+      fechaTraspaso: new Date().toISOString(),
+      nota: transferData.transferNote || 'Traspaso de propiedad',
+      nuevoCertificadoHash: nuevoIpfsHash,
+      nuevoQr: nuevoQrUrl
+    });
+
+    showLoading("Registrando traspaso en Blockchain...");
+    const tx = await contract.transferProperty(
+      transferId,
+      transferData.newOwnerName,
+      transferData.newOwnerId,
+      metaTraspaso
+    );
+    await tx.wait();
+
+    hideLoading();
+    showToast('¡Traspaso registrado exitosamente! Se ha generado un nuevo certificado.', "success");
+    
+    setTransferData({ newOwnerName: '', newOwnerId: '', transferNote: '' });
+    setTransferId('');
+
+  } catch (error) {
+  hideLoading();
+  console.error("Error en traspaso:", error);
+  
+  let errorMessage = "Error al registrar el traspaso";
+  
+  if (error.code === 'ACTION_REJECTED' || 
+      error.code === 4001 || 
+      error.message?.includes('user rejected') ||
+      error.message?.includes('User denied') ||
+      error.message?.includes('rejected')) {
+    errorMessage = "Transacción rechazada en MetaMask";
+  } else if (error.reason) {
+    errorMessage = error.reason;
+  } else if (error.message) {
+    const match = error.message.match(/reason="([^"]+)"/);
+    if (match) errorMessage = match[1];
+    else if (error.message.includes("insufficient funds")) errorMessage = "Saldo insuficiente en la wallet";
+  }
+  
+  showToast(errorMessage, "error");
+}
+};
+
+  // ─── Consulta por ID ──────────────────────────────────────────────────────
   const getProperty = async (e, forcedId) => {
     if (e) e.preventDefault();
     const id = forcedId !== undefined ? forcedId : propertyId;
@@ -526,13 +1019,37 @@ function AuthorityPanel({ contract, setTotalProperties }) {
 
   return (
     <>
+      {/* Modal de carga */}
+    {showLoadingModal && (
+      <div className="modal-overlay">
+        <div className="modal-loading">
+          <div className="modal-spinner"></div>
+          <div className="modal-message">{loadingMessage}</div>
+          <div className="modal-submessage">Por favor espere, esto puede tomar unos segundos...</div>
+        </div>
+      </div>
+    )}
+
+    {/* Toast de notificación */}
+    {toast.show && (
+      <div className={`toast-notification ${toast.type}`}>
+        <div className="toast-icon">
+          {toast.type === 'success' ? <IconCheck /> : <IconAlertTriangle />}
+        </div>
+        <div className="toast-message">{toast.message}</div>
+        <button className="toast-close" onClick={() => setToast({ show: false, message: '', type: 'success' })}>
+          ✕
+        </button>
+      </div>
+    )}
+
       <div className="module-banner module-banner-authority">
         <div className="module-banner-icon"><IconKey /></div>
         <div>
           <div className="module-banner-title">Panel de Autoridad — Registrador Oficial</div>
           <div className="module-banner-sub">
             Acceso restringido. Solo la wallet del Registrador puede crear, transferir y verificar títulos.
-            La matrícula es generada automáticamente por el sistema.
+            La matrícula es generada automáticamente. Registrador: <strong>{REGISTRADOR_NOMBRE}</strong>.
           </div>
         </div>
       </div>
@@ -553,15 +1070,8 @@ function AuthorityPanel({ contract, setTotalProperties }) {
           {operationType === 'new' && (
             <>
               <div className="op-notice op-notice-new">
-                <IconBuilding /> Registrando un <strong>título nuevo</strong>. La matrícula (RD-YYMMDD-XXXX) se genera automáticamente al confirmar la transacción.
+                <IconBuilding /> Registrando un <strong>título nuevo</strong>. La matrícula y el nombre del Registrador se asignan automáticamente.
               </div>
-
-              {/* Advertencia duplicado IPFS */}
-              {ipfsWarning && (
-                <div className={`ipfs-alert ipfs-alert-${ipfsWarning.type}`}>
-                  <IconAlertTriangle /> {ipfsWarning.message}
-                </div>
-              )}
 
               <form onSubmit={registerProperty}>
                 <div className="form-grid">
@@ -578,6 +1088,14 @@ function AuthorityPanel({ contract, setTotalProperties }) {
                     <input type="text" name="nationality" value={formData.nationality} onChange={handleInputChange} className="form-control" />
                   </div>
                   <div className="form-group">
+                    <label className="form-label">Provincia</label>
+                    <input type="text" name="provincia" value={formData.provincia} onChange={handleInputChange} className="form-control" />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Municipio</label>
+                    <input type="text" name="municipio" value={formData.municipio} onChange={handleInputChange} className="form-control" />
+                  </div>
+                  <div className="form-group">
                     <label className="form-label">Ubicación</label>
                     <input type="text" name="propertyLocation" value={formData.propertyLocation} onChange={handleInputChange} placeholder="Santo Domingo de Guzmán" className="form-control" />
                   </div>
@@ -588,6 +1106,7 @@ function AuthorityPanel({ contract, setTotalProperties }) {
                   <div className="form-group">
                     <label className="form-label">Parcela<span className="req">*</span></label>
                     <input type="text" name="parcel" value={formData.parcel} onChange={handleInputChange} placeholder="Parcela 10-A" required className="form-control" />
+                    
                   </div>
                   <div className="form-group">
                     <label className="form-label">Superficie (m²)<span className="req">*</span></label>
@@ -597,18 +1116,15 @@ function AuthorityPanel({ contract, setTotalProperties }) {
                     <label className="form-label">Fecha de Registro</label>
                     <input type="date" name="registrationDate" value={formData.registrationDate} onChange={handleInputChange} className="form-control date-input" />
                   </div>
-                  <div className="form-group">
-                    <label className="form-label">Documento adjunto (PDF/Imagen)</label>
-                    <label className="file-label">
-                      <IconUpload />
-                      {selectedFile ? selectedFile.name : 'Seleccionar archivo...'}
-                      <input type="file" style={{ display: 'none' }} onChange={handleFileSelect} />
-                    </label>
-                    {selectedFile && <div className="file-selected"><IconFile /> {selectedFile.name}</div>}
-                    <div className="form-hint">Si el documento ya está registrado en otro título, el sistema lo detectará y bloqueará el registro.</div>
-                  </div>
+                  
                 </div>
-                <button type="submit" className="btn btn-primary btn-full" disabled={loading || uploading || ipfsWarning?.type === 'error'}>
+
+                <div className="registrador-info-box">
+                  <IconKey />
+                  <span>Registrador: <strong>{REGISTRADOR_NOMBRE}</strong> — {REGISTRADOR_TITULO}</span>
+                </div>
+
+                <button type="submit" className="btn btn-primary btn-full" style={{ marginTop: 16 }} disabled={loading || uploading}>
                   {uploading ? <><IconUpload /> Subiendo documento...</> : loading ? 'Procesando transacción...' : <><IconPlusCircle /> Registrar Nuevo Título</>}
                 </button>
               </form>
@@ -624,7 +1140,7 @@ function AuthorityPanel({ contract, setTotalProperties }) {
               <form onSubmit={transferProperty}>
                 <div className="form-grid">
                   <div className="form-group">
-                    <label className="form-label">Matrícula o ID del Título<span className="req">*</span></label>
+                    <label className="form-label">ID del Título a Traspasar<span className="req">*</span></label>
                     <input type="number" value={transferId} onChange={e => setTransferId(e.target.value)}
                       placeholder="ID interno del título" required className="form-control" />
                   </div>
@@ -735,17 +1251,21 @@ function App() {
 
         .top-bar { 
   background: #001a42; 
-  padding: 6px 32px; 
+  padding: 8px 32px; 
   display: flex; 
-  align-items: center; 
-  justify-content: center;  /* ← Agrega esta línea para centrar */
-  gap: 8px; 
+  justify-content: center; 
+  align-items: center;  /* ← Asegura alineación vertical */
+  gap: 10px; 
   font-size: 11.5px; 
   color: rgba(255,255,255,0.60); 
   letter-spacing: 0.05em; 
   text-transform: uppercase; 
 }
-        .top-bar svg { opacity: 0.6; }
+.top-bar svg { 
+  opacity: 0.8;
+  vertical-align: middle;  /* ← Alinea el icono con el texto */
+  margin-top: -2px;        /* ← Ajuste fino (puedes cambiar el valor) */
+}
         .gov-header { background: #002868; padding: 0; border-bottom: 4px solid #CE1126; }
         .header-inner { width: 100%; padding: 20px 32px; display: flex; align-items: center; gap: 18px; }
         .header-logo-box { color: rgba(255,255,255,0.90); flex-shrink: 0; display: flex; align-items: center; }
@@ -778,16 +1298,18 @@ function App() {
         .module-banner-title { font-weight: 700; font-size: 14px; color: #1A202C; margin-bottom: 3px; }
         .module-banner-sub { font-size: 12.5px; color: var(--gris-texto); }
 
-        /* Tabs búsqueda */
         .search-type-tabs { display: flex; gap: 8px; flex-wrap: wrap; }
         .search-tab { display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; border: 1.5px solid var(--gris-borde); border-radius: 4px; background: var(--blanco); font-size: 13px; font-family: 'Source Sans 3', sans-serif; cursor: pointer; color: var(--gris-texto); transition: all 0.15s; }
         .search-tab:hover { border-color: var(--azul-claro); color: var(--azul); }
         .search-tab.active { background: var(--azul); color: var(--blanco); border-color: var(--azul); }
 
-        /* Alerta IPFS duplicado */
-        .ipfs-alert { display: flex; align-items: flex-start; gap: 10px; padding: 12px 16px; border-radius: 4px; font-size: 13px; margin-bottom: 20px; }
-        .ipfs-alert-error { background: #FFF5F5; border: 1.5px solid #FEB2B2; color: #C53030; border-left: 4px solid var(--rojo); }
-        .ipfs-alert-warning { background: #FFFBEB; border: 1.5px solid #FBD38D; color: #744210; border-left: 4px solid #D97706; }
+        /* Caja informativa del registrador fijo */
+        .registrador-info-box {
+          display: flex; align-items: center; gap: 10px;
+          background: #F0FFF4; border: 1px solid #9AE6B4; border-radius: 4px;
+          padding: 10px 16px; font-size: 13px; color: #276749;
+          margin-top: 4px;
+        }
 
         .btn { display: inline-flex; align-items: center; gap: 8px; border: none; border-radius: 4px; cursor: pointer; font-family: 'Source Sans 3', sans-serif; font-weight: 600; letter-spacing: 0.03em; transition: all 0.18s ease; white-space: nowrap; }
         .btn:disabled { opacity: 0.55; cursor: not-allowed; }
@@ -824,14 +1346,10 @@ function App() {
         .form-control::placeholder { color: #A0AEC0; }
         .form-hint { font-size: 11.5px; color: #A0AEC0; margin-top: 5px; }
 
-        /* ── Fix calendario ── */
         .date-input { color-scheme: light; }
         .date-input::-webkit-calendar-picker-indicator {
           background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%234A5568' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='4' width='18' height='18' rx='2' ry='2'/%3E%3Cline x1='16' y1='2' x2='16' y2='6'/%3E%3Cline x1='8' y1='2' x2='8' y2='6'/%3E%3Cline x1='3' y1='10' x2='21' y2='10'/%3E%3C/svg%3E");
-          cursor: pointer;
-          opacity: 1;
-          filter: none;
-          padding: 2px;
+          cursor: pointer; opacity: 1; filter: none; padding: 2px;
         }
 
         .file-label { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border: 1.5px dashed var(--gris-borde); border-radius: 4px; cursor: pointer; font-size: 13.5px; color: var(--gris-texto); background: var(--gris-claro); transition: border-color 0.15s; }
@@ -862,13 +1380,323 @@ function App() {
         .gov-footer-item { display: flex; align-items: center; gap: 6px; }
 
         @media (max-width: 700px) {
-          .gov-main { padding: 20px 16px 40px; }
-          .form-grid { grid-template-columns: 1fr; }
-          .header-inner { padding: 20px 16px; }
-          .wallet-panel { flex-direction: column; align-items: flex-start; gap: 14px; }
-          .top-bar, .gov-nav { padding-left: 16px; padding-right: 16px; }
-          .wallet-info { flex-wrap: wrap; }
-        }
+  /* Layout principal */
+  .gov-main { 
+    padding: 20px 16px 40px; 
+  }
+  
+  /* Header */
+  .header-inner { 
+    padding: 16px; 
+    flex-wrap: wrap;
+    justify-content: center;
+    text-align: center;
+    gap: 12px;
+  }
+  .header-logo-box {
+    display: none; /* Opcional: oculta el logo en móvil */
+  }
+  .header-text h1 {
+    font-size: 18px;
+  }
+  .header-text p {
+    font-size: 11px;
+  }
+  .header-badge {
+    padding: 4px 12px;
+    font-size: 11px;
+  }
+  
+  /* TOP BAR - MÓVIL */
+  .top-bar { 
+    padding: 8px 12px;
+    font-size: 9px;
+    text-align: center;
+    line-height: 1.4;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .top-bar svg {
+    width: 12px;
+    height: 12px;
+  }
+  
+  /* Navegación */
+  .gov-nav { 
+    padding: 8px 16px;
+  }
+  .gov-nav-inner {
+    font-size: 10px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  
+  /* Panel de wallet */
+  .wallet-panel { 
+    flex-direction: column; 
+    align-items: center;  /* Centrado en móvil */
+    gap: 14px; 
+    text-align: center;
+  }
+  .wallet-label {
+    font-size: 11px;
+  }
+  .wallet-info { 
+    flex-wrap: wrap; 
+    justify-content: center;
+  }
+  .wallet-stat strong {
+    font-size: 16px;
+  }
+  .wallet-address {
+    font-size: 11px;
+  }
+  
+  /* Formulario */
+  .form-grid { 
+    grid-template-columns: 1fr; 
+    gap: 14px;
+  }
+  .section-header {
+    padding: 12px 16px;
+  }
+  .section-header h2 {
+    font-size: 15px;
+  }
+  .section-body {
+    padding: 20px 16px;
+  }
+  
+  /* Selector de operación (Registro Nuevo / Traspaso) */
+  .op-selector {
+    flex-direction: column;
+    gap: 6px;
+    border: none;
+  }
+  .op-btn {
+    border-radius: 5px;
+    border: 1.5px solid var(--gris-borde);
+  }
+  .op-btn-transfer {
+    border-left: 1.5px solid var(--gris-borde);
+  }
+  
+  /* Avisos */
+  .op-notice {
+    font-size: 11px;
+    padding: 8px 12px;
+  }
+  
+  /* Botones */
+  .btn {
+    padding: 10px 16px;
+    font-size: 13px;
+  }
+  .btn-sm {
+    padding: 8px 14px;
+  }
+  
+  /* Barra de búsqueda */
+  .search-bar {
+    flex-direction: column;
+  }
+  .search-bar .btn {
+    width: 100%;
+    justify-content: center;
+  }
+  
+  /* Tarjetas de resultado */
+  .result-body {
+    flex-direction: column;
+    align-items: center;
+  }
+  .result-row {
+    flex-direction: column;
+    gap: 4px;
+  }
+  .result-key {
+    width: auto;
+  }
+  
+  /* QR panel */
+  .qr-panel {
+    margin-top: 15px;
+  }
+  
+  /* Footer */
+  .gov-footer {
+    padding: 16px;
+    font-size: 9px;
+  }
+  .gov-footer-items {
+    flex-direction: column;
+    gap: 8px;
+    align-items: center;
+  }
+  
+  /* Módulo de autoridad */
+  .module-banner {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+  .module-banner-title {
+    font-size: 13px;
+  }
+  .module-banner-sub {
+    font-size: 11px;
+  }
+}
+
+/* Pantallas muy pequeñas (menos de 480px) */
+@media (max-width: 480px) {
+  .header-text h1 {
+    font-size: 16px;
+  }
+  .wallet-stat span {
+    font-size: 9px;
+  }
+  .wallet-stat strong {
+    font-size: 14px;
+  }
+  .form-label {
+    font-size: 10px;
+  }
+  .form-control {
+    font-size: 13px;
+    padding: 8px 10px;
+  }
+  .btn {
+    padding: 8px 14px;
+    font-size: 12px;
+  }
+  .top-bar {
+    font-size: 8px;
+  }
+}
+
+/* Modal de carga */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+.modal-loading {
+  background: white;
+  border-radius: 12px;
+  padding: 30px 40px;
+  text-align: center;
+  min-width: 320px;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+  border-top: 4px solid #002868;
+}
+.modal-spinner {
+  width: 50px;
+  height: 50px;
+  border: 4px solid #e0e0e0;
+  border-top: 4px solid #002868;
+  border-radius: 50%;
+  margin: 0 auto 20px;
+  animation: spin 1s linear infinite;
+}
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+.modal-message {
+  font-size: 16px;
+  font-weight: 600;
+  color: #002868;
+  margin-bottom: 10px;
+}
+.modal-submessage {
+  font-size: 12px;
+  color: #666;
+}
+
+/* Toast notification */
+.toast-notification {
+  position: fixed;
+  bottom: 30px;
+  right: 30px;
+  min-width: 320px;
+  background: white;
+  border-radius: 8px;
+  padding: 16px 20px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  box-shadow: 0 5px 20px rgba(0,0,0,0.15);
+  z-index: 1001;
+  animation: slideIn 0.3s ease;
+  border-left: 4px solid;
+}
+.toast-notification.success {
+  border-left-color: #28a745;
+}
+.toast-notification.error {
+  border-left-color: #dc3545;
+}
+.toast-icon svg {
+  width: 20px;
+  height: 20px;
+}
+.toast-notification.success .toast-icon svg {
+  stroke: #28a745;
+}
+.toast-notification.error .toast-icon svg {
+  stroke: #dc3545;
+}
+.toast-message {
+  flex: 1;
+  font-size: 13px;
+  color: #333;
+}
+.toast-close {
+  background: none;
+  border: none;
+  font-size: 16px;
+  cursor: pointer;
+  color: #999;
+  padding: 0 5px;
+}
+.toast-close:hover {
+  color: #333;
+}
+@keyframes slideIn {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+/* Responsive para móvil */
+@media (max-width: 480px) {
+  .modal-loading {
+    min-width: 280px;
+    padding: 25px 30px;
+  }
+  .modal-message {
+    font-size: 14px;
+  }
+  .toast-notification {
+    bottom: 20px;
+    right: 20px;
+    left: 20px;
+    min-width: auto;
+  }
+}
       `}</style>
 
       <div className="gov-app">
@@ -934,7 +1762,7 @@ function App() {
             <div className="gov-footer-item"><IconDatabase /> Documentos en IPFS descentralizado</div>
             <div className="gov-footer-item"><IconLink /> Verificación mediante código QR</div>
           </div>
-          <p>Jurisdicción Inmobiliaria — República Dominicana — {new Date().getFullYear()}</p>
+          <p>© 2026 Jurisdicción Inmobiliaria - República Dominicana</p>
         </footer>
       </div>
     </>
