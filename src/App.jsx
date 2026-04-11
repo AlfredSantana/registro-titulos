@@ -6,12 +6,12 @@ import QRCode from 'qrcode';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 
-const CONTRACT_ADDRESS = "0xC5117F33935DcFEB2Ef59aa8743F12F5E3b8a8c9";
+const CONTRACT_ADDRESS = "0x1621c22640351d707B4a41815B214C6BFFbFC851";
 const PINATA_API_KEY = "cf5e544fb393d2c00a40";
 const PINATA_SECRET_KEY = "9fb8aa518f53c9e4b999ef9ab795902a18ed17e30880d4b1c909b1cc54ff3781";
 const SEPOLIA_RPC = 'https://ethereum-sepolia.publicnode.com';
 
-// Registrador fijo — no varía
+// Registrador fijo
 const REGISTRADOR_NOMBRE = "Arianny Cristina Batista";
 const REGISTRADOR_TITULO = "Registrador de Títulos Adscrito";
 
@@ -170,10 +170,7 @@ const generateQR = async (id) => {
 };
 
 // ─── Generador HTML del Certificado (idéntico al diseño oficial) ──────────────
-/**
- * Genera el HTML del certificado oficial.
- * IMPORTANTE: ipfsHash ya debe tener el valor real cuando se llama esta función.
- */
+
 const generarHTMLCertificado = (datos, qrDataUrl, tipo) => {
   const {
     id, matricula, ownerName, ownerId, nationality, parcel, area,
@@ -412,17 +409,20 @@ const generarHTMLCertificado = (datos, qrDataUrl, tipo) => {
 
       <div class="footer-info-box">
         <div class="blockchain-info">
-          <div style="display:flex;align-items:center;gap:5px;margin-bottom:3px;">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#0076c2" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
-              <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
-            </svg>
-            <strong style="color:#0076c2;">INFORMACIÓN DE BLOCKCHAIN</strong>
-          </div>
-          ID Blockchain: <strong>#${id}</strong> | Hash IPFS: <span class="hash-text">${shortHash}</span><br>
-Red: Sepolia Testnet | Contrato: <span class="hash-text">${shortContract}</span><br>
-          Tipo: <strong>${tipo}</strong>
-        </div>
+  <div style="display:flex;align-items:center;gap:5px;margin-bottom:3px;">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#0076c2" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+      <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+    </svg>
+    <strong style="color:#0076c2;">INFORMACIÓN DE BLOCKCHAIN</strong>
+  </div>
+  <div><strong>ID Blockchain:</strong> #${id}</div>
+  <div><strong>Matrícula:</strong> ${matricula || `${new Date().getFullYear()}-${String(id).padStart(6, '0')}`}</div>
+  <div><strong>Red:</strong> Sepolia Testnet (Ethereum)</div>
+  <div><strong>Contrato:</strong> <span style="font-family:monospace;font-size:9px;">${shortContract}</span></div>
+  <div><strong>Tipo:</strong> ${tipo}</div>
+  <div><strong>Fecha de Registro:</strong> ${registrationDate || new Date().toLocaleDateString('es-DO')}</div>
+</div>
 
         <div class="qr-box">
           ${qrDataUrl
@@ -688,6 +688,7 @@ const showToast = (message, type = 'success') => {
 
 // Mostrar modal de carga con mensaje dinámico
 const showLoading = (message) => {
+  setLoading(true);              // ← NUEVO: activa loading del botón
   setLoadingMessage(message);
   setShowLoadingModal(true);
 };
@@ -695,6 +696,7 @@ const showLoading = (message) => {
 const hideLoading = () => {
   setShowLoadingModal(false);
   setLoadingMessage('');
+  // NO poner setLoading(false) aquí, se maneja aparte
 };
 
   // Registrador eliminado del formulario — es una constante del sistema
@@ -752,7 +754,7 @@ const registerProperty = async (e) => {
     const totalActual = await contract.getTotalProperties();
     const nuevoId = Number(totalActual) + 1;
     
-    // 🔥 PRIMERO: Verificar si la parcela ya existe (simular transacción)
+    // Verificar si la parcela ya existe (simular transacción)
     showLoading("Validando parcela en Blockchain...");
     try {
       // Llamada estática para verificar sin gastar gas
@@ -761,8 +763,8 @@ const registerProperty = async (e) => {
         formData.ownerId,
         formData.parcel,
         formData.area,
-        "0x", // hash temporal
-        "{}"  // metadata temporal
+        "0x", 
+        "{}"
       );
     } catch (validationError) {
       // Extraer el mensaje de error del contrato
@@ -775,13 +777,20 @@ const registerProperty = async (e) => {
         else if (validationError.message.includes("parcela")) errorMessage = "Esta parcela ya se encuentra registrada en el sistema";
       }
       hideLoading();
+      setLoading(false);
       showToast(errorMessage, "error");
       return;
     }
 
     // Si llegamos aquí, la parcela NO está duplicada
     const qrUrlTemp = await generateQR(nuevoId);
-    const matriculaGenerada = `${new Date().getFullYear()}-${String(nuevoId).padStart(6, '0')}`;
+    // Generar matrícula con formato RD-YYMMDD-XXXXX
+    const hoy = new Date();
+    const yy = hoy.getFullYear().toString().slice(-2);
+    const mm = String(hoy.getMonth() + 1).padStart(2, '0');
+    const dd = String(hoy.getDate()).padStart(2, '0');
+    const secuencial = String(nuevoId).padStart(5, '0');
+    const matriculaGenerada = `RD-${yy}${mm}${dd}-${secuencial}`;
 
     const datosCert = {
       id: nuevoId,
@@ -799,12 +808,13 @@ const registerProperty = async (e) => {
       ipfsHash: ''
     };
 
-    // 🔥 AHORA SÍ: Generar certificado y subir a IPFS (solo si la validación pasó)
+    // Generar certificado y subir a IPFS (solo si la validación pasó)
     showLoading("Generando certificado digital y subiendo a IPFS...");
     const ipfsHashFinal = await generarCertificadoPDF(datosCert, qrUrlTemp, 'REGISTRO INICIAL', uploadToIPFS);
 
     if (!ipfsHashFinal) {
       hideLoading();
+      setLoading(false);
       showToast('Error al generar o subir el certificado. Intente de nuevo.', "error");
       return;
     }
@@ -837,6 +847,7 @@ const registerProperty = async (e) => {
     await tx.wait();
 
     hideLoading();
+    setLoading(false);
     showToast('¡Título registrado exitosamente en la Blockchain!', "success");
 
     const total = await contract.getTotalProperties();
@@ -850,47 +861,45 @@ const registerProperty = async (e) => {
       municipio: 'SANTO DOMINGO, D.N.',
     });
     setSelectedFile(null);
+    setPropertyId('');
+    setPropertyData(null);
 
-} catch (error) {
-  hideLoading();
-  console.error("Error detallado:", error);
-  
-  // Extraer mensaje de error legible
-  let errorMessage = "Error al registrar el título";
-  
-  // Caso 1: Usuario rechazó la transacción en MetaMask
-  if (error.code === 'ACTION_REJECTED' || 
-      error.code === 4001 || 
-      error.message?.includes('user rejected') ||
-      error.message?.includes('User denied') ||
-      error.message?.includes('rejected') ||
-      error.error?.message?.includes('reject')) {
-    errorMessage = "Transacción rechazada en MetaMask";
-  }
-  // Caso 2: Error del contrato con reason
-  else if (error.reason) {
-    errorMessage = error.reason;
-  }
-  // Caso 3: Error con reason dentro del message
-  else if (error.message) {
-    const match = error.message.match(/reason="([^"]+)"/);
-    if (match) {
-      errorMessage = match[1];
-    } else if (error.message.includes("insufficient funds")) {
-      errorMessage = "Saldo insuficiente en la wallet";
-    } else if (error.message.includes("gas")) {
-      errorMessage = "Error con el gas de la transacción";
-    } else if (error.message.includes("already registered")) {
-      errorMessage = "Esta parcela ya se encuentra registrada en el sistema";
+  } catch (error) {
+    hideLoading();
+    setLoading(false);
+    console.error("Error detallado:", error);
+    
+    let errorMessage = "Error al registrar el título";
+    
+    if (error.code === 'ACTION_REJECTED' || 
+        error.code === 4001 || 
+        error.message?.includes('user rejected') ||
+        error.message?.includes('User denied') ||
+        error.message?.includes('rejected') ||
+        error.error?.message?.includes('reject')) {
+      errorMessage = "Transacción rechazada en MetaMask";
     }
+    else if (error.reason) {
+      errorMessage = error.reason;
+    }
+    else if (error.message) {
+      const match = error.message.match(/reason="([^"]+)"/);
+      if (match) {
+        errorMessage = match[1];
+      } else if (error.message.includes("insufficient funds")) {
+        errorMessage = "Saldo insuficiente en la wallet";
+      } else if (error.message.includes("gas")) {
+        errorMessage = "Error con el gas de la transacción";
+      } else if (error.message.includes("already registered")) {
+        errorMessage = "Esta parcela ya se encuentra registrada en el sistema";
+      }
+    }
+    else if (error.code === 'NETWORK_ERROR') {
+      errorMessage = "Error de conexión con la red. Verifique su conexión a Internet.";
+    }
+    
+    showToast(errorMessage, "error");
   }
-  // Caso 4: Error de conexión
-  else if (error.code === 'NETWORK_ERROR') {
-    errorMessage = "Error de conexión con la red. Verifique su conexión a Internet.";
-  }
-  
-  showToast(errorMessage, "error");
-}
 };
 
   // ─── Traspaso ─────────────────────────────────────────────────────────────
@@ -916,6 +925,7 @@ const transferProperty = async (e) => {
     const nuevoQrUrl = await generateQR(transferId);
     const matriculaActual = propiedadActual[1];
 
+    // Datos para el nuevo certificado (con el nuevo propietario)
     const datosNuevoCert = {
       id: transferId,
       matricula: matriculaActual,
@@ -932,67 +942,74 @@ const transferProperty = async (e) => {
       ipfsHash: ''
     };
 
-    // 🔥 SOLO UNA LLAMADA: Generar certificado y subir a IPFS
+    // Generar nuevo certificado con los datos del nuevo propietario
     showLoading("Generando nuevo certificado digital...");
     const nuevoIpfsHash = await generarCertificadoPDF(datosNuevoCert, nuevoQrUrl, 'TRASPASO', uploadToIPFS);
     
     if (!nuevoIpfsHash) {
       hideLoading();
+      setLoading(false);
       showToast('Error al generar el certificado de traspaso', "error");
       return;
-    }
+    }  
 
     const metaTraspaso = JSON.stringify({
       fechaTraspaso: new Date().toISOString(),
       nota: transferData.transferNote || 'Traspaso de propiedad',
       nuevoCertificadoHash: nuevoIpfsHash,
       nuevoQr: nuevoQrUrl
-    });
+    });  
 
-    showLoading("Registrando traspaso en Blockchain...");
-    const tx = await contract.transferProperty(
+    // ─── TRANSACCIÓN ÚNICA: TRASPASO + ACTUALIZACIÓN DE IPFS ──────────────
+    showLoading("Registrando traspaso y actualizando certificado en Blockchain...");
+
+    const tx = await contract.transferPropertyWithCertificate(
       transferId,
       transferData.newOwnerName,
       transferData.newOwnerId,
-      metaTraspaso
+      metaTraspaso,
+      nuevoIpfsHash
     );
+
     await tx.wait();
 
     hideLoading();
-    showToast('¡Traspaso registrado exitosamente! Se ha generado un nuevo certificado.', "success");
+    setLoading(false);
+    showToast('¡Traspaso registrado exitosamente! Se ha generado un nuevo certificado para el nuevo propietario.', "success");
     
     setTransferData({ newOwnerName: '', newOwnerId: '', transferNote: '' });
     setTransferId('');
+    setPropertyData(null);
 
   } catch (error) {
-  hideLoading();
-  console.error("Error en traspaso:", error);
-  
-  let errorMessage = "Error al registrar el traspaso";
-  
-  if (error.code === 'ACTION_REJECTED' || 
-      error.code === 4001 || 
-      error.message?.includes('user rejected') ||
-      error.message?.includes('User denied') ||
-      error.message?.includes('rejected')) {
-    errorMessage = "Transacción rechazada en MetaMask";
-  } else if (error.reason) {
-    errorMessage = error.reason;
-  } else if (error.message) {
-    const match = error.message.match(/reason="([^"]+)"/);
-    if (match) errorMessage = match[1];
-    else if (error.message.includes("insufficient funds")) errorMessage = "Saldo insuficiente en la wallet";
+    hideLoading();
+    setLoading(false);
+    console.error("Error en traspaso:", error);
+    
+    let errorMessage = "Error al registrar el traspaso";
+    
+    if (error.code === 'ACTION_REJECTED' || 
+        error.code === 4001 || 
+        error.message?.includes('user rejected') ||
+        error.message?.includes('User denied') ||
+        error.message?.includes('rejected')) {
+      errorMessage = "Transacción rechazada en MetaMask";
+    } else if (error.reason) {
+      errorMessage = error.reason;
+    } else if (error.message) {
+      const match = error.message.match(/reason="([^"]+)"/);
+      if (match) errorMessage = match[1];
+      else if (error.message.includes("insufficient funds")) errorMessage = "Saldo insuficiente en la wallet";
+    }
+    
+    showToast(errorMessage, "error");
   }
-  
-  showToast(errorMessage, "error");
-}
 };
-
   // ─── Consulta por ID ──────────────────────────────────────────────────────
   const getProperty = async (e, forcedId) => {
     if (e) e.preventDefault();
     const id = forcedId !== undefined ? forcedId : propertyId;
-    if (!id || id <= 0) { alert('Ingrese un ID válido'); return; }
+    if (!id || id <= 0) { showToast('Ingrese un ID válido', 'error'); return; }
     try {
       setLoading(true);
       const result = await contract.getProperty(id);
@@ -1000,7 +1017,7 @@ const transferProperty = async (e) => {
       setPropertyData(info);
       setQrCodeUrl(await generateQR(info.id));
     } catch (error) {
-      alert('Propiedad no encontrada.');
+      showToast('Propiedad no encontrada.', "error");
       setPropertyData(null);
     } finally { setLoading(false); }
   };
@@ -1008,13 +1025,35 @@ const transferProperty = async (e) => {
   const verifyProperty = async (id) => {
     try {
       setLoading(true);
+      showLoading("Verificando título en Blockchain...");
       const tx = await contract.verifyProperty(id);
       await tx.wait();
-      alert(`Título verificado oficialmente.`);
+      hideLoading();
+      showToast(`Título #${id} verificado oficialmente en la Blockchain`, "success");
       await getProperty(null, id);
     } catch (error) {
-      alert('Error al verificar: ' + error.message);
-    } finally { setLoading(false); }
+      hideLoading();
+      console.error("Error al verificar:", error);
+      
+      let errorMessage = "Error al verificar el título";
+      
+      if (error.code === 'ACTION_REJECTED' || 
+          error.code === 4001 || 
+          error.message?.includes('user rejected') ||
+          error.message?.includes('User denied')) {
+        errorMessage = "Transacción rechazada en MetaMask";
+      } else if (error.reason) {
+        errorMessage = error.reason;
+      } else if (error.message) {
+        const match = error.message.match(/reason="([^"]+)"/);
+        if (match) errorMessage = match[1];
+        else if (error.message.includes("insufficient funds")) errorMessage = "Saldo insuficiente en la wallet";
+      }
+      
+      showToast(errorMessage, "error");
+    } finally { 
+      setLoading(false);
+    }
   };
 
   return (
@@ -1070,7 +1109,7 @@ const transferProperty = async (e) => {
           {operationType === 'new' && (
             <>
               <div className="op-notice op-notice-new">
-                <IconBuilding /> Registrando un <strong>título nuevo</strong>. La matrícula y el nombre del Registrador se asignan automáticamente.
+                <IconBuilding /> Registrando un <strong>título nuevo.</strong>La matrícula y el nombre del Registrador se asignan automáticamente.
               </div>
 
               <form onSubmit={registerProperty}>
@@ -1081,7 +1120,7 @@ const transferProperty = async (e) => {
                   </div>
                   <div className="form-group">
                     <label className="form-label">Cédula<span className="req">*</span></label>
-                    <input type="text" name="ownerId" value={formData.ownerId} onChange={handleInputChange} placeholder="001-01-00001" required className="form-control" />
+                    <input type="text" name="ownerId" value={formData.ownerId} onChange={handleInputChange} placeholder="001-0000000-1" required className="form-control" />
                   </div>
                   <div className="form-group">
                     <label className="form-label">Nacionalidad</label>

@@ -29,6 +29,31 @@
 			{
 				"indexed": false,
 				"internalType": "string",
+				"name": "oldHash",
+				"type": "string"
+			},
+			{
+				"indexed": false,
+				"internalType": "string",
+				"name": "newHash",
+				"type": "string"
+			}
+		],
+		"name": "IpfsHashUpdated",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": true,
+				"internalType": "uint256",
+				"name": "id",
+				"type": "uint256"
+			},
+			{
+				"indexed": false,
+				"internalType": "string",
 				"name": "matricula",
 				"type": "string"
 			},
@@ -197,6 +222,57 @@
 			}
 		],
 		"name": "transferProperty",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "_id",
+				"type": "uint256"
+			},
+			{
+				"internalType": "string",
+				"name": "_newOwnerName",
+				"type": "string"
+			},
+			{
+				"internalType": "string",
+				"name": "_newOwnerId",
+				"type": "string"
+			},
+			{
+				"internalType": "string",
+				"name": "_transferMetadata",
+				"type": "string"
+			},
+			{
+				"internalType": "string",
+				"name": "_newIpfsHash",
+				"type": "string"
+			}
+		],
+		"name": "transferPropertyWithCertificate",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "_id",
+				"type": "uint256"
+			},
+			{
+				"internalType": "string",
+				"name": "_newIpfsHash",
+				"type": "string"
+			}
+		],
+		"name": "updateIpfsHash",
 		"outputs": [],
 		"stateMutability": "nonpayable",
 		"type": "function"

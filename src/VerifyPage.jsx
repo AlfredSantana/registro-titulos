@@ -4,7 +4,7 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import contractABI from './contractABI.json';
 import QRCode from 'qrcode';
 
-const CONTRACT_ADDRESS = "0xC5117F33935DcFEB2Ef59aa8743F12F5E3b8a8c9";
+const CONTRACT_ADDRESS = "0x1621c22640351d707B4a41815B214C6BFFbFC851";
 const SEPOLIA_RPC = 'https://ethereum-sepolia.publicnode.com';
 
 // ─── SVG Icons ────────────────────────────────────────────────────────────────
@@ -113,6 +113,13 @@ const IconChevronRight = ({ size = 16 }) => (
 const parseProperty = (result) => {
   let metadata = {};
   try { metadata = JSON.parse(result[9]); } catch (e) { metadata = {}; }
+  
+  // Si hay un nuevoCertificadoHash en el metadata (por un traspaso), usarlo
+  let ipfsHash = result[6];
+  if (metadata.nuevoCertificadoHash && metadata.nuevoCertificadoHash !== "") {
+    ipfsHash = metadata.nuevoCertificadoHash;
+  }
+  
   return {
     id:               result[0].toString(),
     matricula:        result[1],
@@ -120,16 +127,17 @@ const parseProperty = (result) => {
     ownerId:          result[3],
     parcel:           result[4],
     area:             result[5],
-    ipfsHash:         result[6],
+    ipfsHash:         ipfsHash,
     timestamp:        new Date(Number(result[7]) * 1000).toLocaleString(),
     isVerified:       result[8],
     nationality:      metadata.nationality      || '',
     district:         metadata.district         || '',
     propertyLocation: metadata.location         || '',
     registrationDate: metadata.registrationDate || '',
-    ipfsUrl: result[6] ? `https://gateway.pinata.cloud/ipfs/${result[6]}` : ''
+    ipfsUrl: ipfsHash ? `https://gateway.pinata.cloud/ipfs/${ipfsHash}` : ''
   };
 };
+
 
 // ─── Componente: Card resumen en lista de múltiples títulos ───────────────────
 // ─── Componente: Card resumen en lista de múltiples títulos ───────────────────
@@ -769,23 +777,101 @@ const handleSearch = async (e) => {
                 </div>
               </div>
 
-<div className="actions-panel" style={{ textAlign: 'center' }}>
-  <div style={{ maxWidth: '500px', margin: '0 auto' }}>
-    <h3 style={{ color: 'var(--azul)', marginBottom: '10px', fontSize: '18px' }}>Documentación Original</h3>
-    <p style={{ fontSize: '13px', color: 'var(--gris-texto)', lineHeight: '1.5' }}>
+              {/* Historial de Propietarios */}
+{history.length > 0 && (
+  <div className="cert-card">
+    <div className="cert-section-header">
+      <IconHistory size={16} /> 
+      Historial de Propietarios ({history.length})
+    </div>
+    <div className="history-list">
+      {history.map((h, i) => (
+        <div className="history-item" key={i}>
+          <div className={`history-dot ${h.isFirst ? 'first' : ''}`} />
+          <div className="history-content">
+            <div className="history-name">
+              {h.ownerName}
+              {h.isFirst && <span className="badge badge-verified" style={{ marginLeft: '10px', fontSize: '10px' }}>Registro Inicial</span>}
+            </div>
+            <div className="history-meta">
+              Cédula: {h.ownerId} | Fecha: {h.timestamp}
+            </div>
+            {h.note && h.note !== "Registro inicial" && (
+              <div className="history-note">
+                <strong>Motivo:</strong> {h.note}
+              </div>
+            )}
+          </div>
+        </div>
+      ))}
+    </div>
+  </div>
+)}
+
+<div className="actions-panel" style={{ 
+  display: 'flex', 
+  flexDirection: 'column', 
+  gap: '24px',
+  padding: '24px'
+}}>
+  
+  {/* Sección de Documentación Original */}
+  <div style={{ textAlign: 'center' }}>
+    <h3 style={{ color: 'var(--azul)', marginBottom: '8px', fontSize: '18px' }}>Documentación Original</h3>
+    <p style={{ fontSize: '13px', color: 'var(--gris-texto)', lineHeight: '1.5', maxWidth: '450px', margin: '0 auto' }}>
       Este registro cuenta con un respaldo digital almacenado de forma descentralizada en IPFS (InterPlanetary File System).
     </p>
   </div>
 
+  {/* Tarjeta de Datos Técnicos */}
   <div style={{ 
-  display: 'flex', 
-  justifyContent: 'center', 
-  alignItems: 'center', 
-  gap: '20px', 
-  marginTop: '25px',
-  flexWrap: 'wrap'
-}}>
-  <a 
+    backgroundColor: '#f0f4f8', 
+    padding: '14px 18px', 
+    borderRadius: '8px', 
+    maxWidth: '480px', 
+    margin: '0 auto',
+    width: '100%',
+    border: '1px solid #e2e8f0'
+  }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px', paddingBottom: '6px', borderBottom: '1px solid #cbd5e0' }}>
+      <IconBlockchain size={14} />
+      <strong style={{ fontSize: '11px', letterSpacing: '0.5px' }}>INFORMACIÓN DE BLOCKCHAIN</strong>
+    </div>
+    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 12px', fontSize: '11px' }}>
+      <div><span style={{ color: '#4a5568' }}>ID del Título:</span></div>
+      <div><strong>#{property.id}</strong></div>
+      
+      <div><span style={{ color: '#4a5568' }}>Matrícula:</span></div>
+      <div><strong>{property.matricula}</strong></div>
+      
+      <div><span style={{ color: '#4a5568' }}>Red Blockchain:</span></div>
+      <div>Sepolia Testnet (Ethereum)</div>
+      
+      <div><span style={{ color: '#4a5568' }}>Contrato:</span></div>
+      <div><code style={{ fontSize: '9px' }}>{CONTRACT_ADDRESS.slice(0, 12)}...{CONTRACT_ADDRESS.slice(-8)}</code></div>
+      
+      {property.ipfsHash && (
+        <>
+          <div><span style={{ color: '#4a5568' }}>Hash IPFS:</span></div>
+          <div><code style={{ fontSize: '9px' }}>{property.ipfsHash.slice(0, 16)}...{property.ipfsHash.slice(-8)}</code></div>
+        </>
+      )}
+      
+      <div><span style={{ color: '#4a5568' }}>Timestamp:</span></div>
+      <div>{property.timestamp}</div>
+    </div>
+  </div>
+
+  {/* Botones */}
+  <div style={{ 
+    display: 'flex', 
+    justifyContent: 'center', 
+    alignItems: 'center', 
+    gap: '16px', 
+    flexWrap: 'wrap',
+    marginTop: '4px'
+  }}>
+    <a 
     href={property.ipfsUrl} 
     target="_blank" 
     rel="noreferrer" 
@@ -809,7 +895,7 @@ const handleSearch = async (e) => {
     <IconLink size={14} /> Ver Original en IPFS
   </a>
 
-  <button 
+    <button 
     onClick={downloadCertificate} 
     style={{ 
       backgroundColor: '#002D6E',
@@ -831,7 +917,7 @@ const handleSearch = async (e) => {
   >
     <IconDownload size={16} /> Descargar Certificado PDF
   </button>
-</div>
+  </div>
 </div>
 </div>
             
