@@ -171,7 +171,7 @@ const generateQR = async (id) => {
 
 // ─── Generador HTML del Certificado (idéntico al diseño oficial) ──────────────
 
-const generarHTMLCertificado = (datos, qrDataUrl, tipo) => {
+const generarHTMLCertificado = (datos, qrDataUrl, tipo, motivo = '') => {
   const {
     id, matricula, ownerName, ownerId, nationality, parcel, area,
     district, propertyLocation, registrationDate, provincia, municipio, ipfsHash
@@ -380,20 +380,31 @@ const generarHTMLCertificado = (datos, qrDataUrl, tipo) => {
 
       <div class="main-body">
         <div class="legal-content">
-          En virtud de la Ley y en nombre de la República se declara
-          <strong>TITULAR DEL DERECHO DE PROPIEDAD</strong> a
-          <strong>${ownerName || 'N/A'}</strong>,
-          de nacionalidad <strong>${nationality || 'Dominicana'}</strong>,
-          mayor de edad, Cédula de Identidad No. <strong>${ownerId || 'N/A'}</strong>, sobre el inmueble identificado como
-          <strong>${parcel || 'N/A'}</strong>,
-          que tiene una superficie de
-          <strong>${area || '0'} metros cuadrados (${area || '0'} m²)</strong>,
-          matrícula <strong>${matricula || `${new Date().getFullYear()}-${String(id).padStart(6, '0')}`}</strong>,
-          ubicado en <strong>${propertyLocation || 'Santo Domingo de Guzmán, Distrito Nacional'}</strong>.
-          <br/><br/>
-          <strong>Distrito Catastral:</strong> ${district || 'N/A'} &nbsp;|&nbsp;
-          <strong>Fecha de Registro:</strong> ${registrationDate || new Date().toLocaleDateString('es-DO')}
-        </div>
+  En virtud de la Ley y en nombre de la República se declara
+  <strong>TITULAR DEL DERECHO DE PROPIEDAD</strong> a
+  <strong>${ownerName || 'N/A'}</strong>,
+  de nacionalidad <strong>${nationality || 'Dominicana'}</strong>,
+  mayor de edad, Cédula de Identidad No. <strong>${ownerId || 'N/A'}</strong>,
+  sobre el inmueble identificado como <strong>Parcela ${parcel || 'N/A'}</strong>,
+  del <strong>Distrito Catastral No. ${district || 'N/A'}</strong>,
+  que tiene una superficie de <strong>${area || '0'} metros cuadrados (${area || '0'} m²)</strong>,
+  matrícula <strong>${matricula || `${new Date().getFullYear()}-${String(id).padStart(6, '0')}`}</strong>,
+  ubicado en <strong>${propertyLocation || 'N/A'}</strong>,
+  <strong>${municipio || 'N/A'}</strong>,
+  <strong>${provincia || 'N/A'}</strong>.
+
+  ${tipo === 'TRASPASO' && motivo ? `
+  <br/><br/>
+  El derecho tiene su origen en <strong>${motivo}</strong>, según consta en el documento de fecha <strong>${registrationDate || new Date().toLocaleDateString('es-DO')}</strong>.
+  ` : ''}
+
+  <br/><br/>
+  El presente título queda registrado de forma inmutable en la blockchain de <strong>Ethereum (Red Sepolia)</strong>,
+  con ID interno <strong>#${id}</strong> y contrato inteligente verificable públicamente.
+
+  <br/><br/>
+  <strong>Fecha de Registro en Blockchain:</strong> ${registrationDate || new Date().toLocaleDateString('es-DO')}
+</div>
 
         <div class="signature-area">
           <div class="signature-img-container">
@@ -447,10 +458,10 @@ const generarHTMLCertificado = (datos, qrDataUrl, tipo) => {
 };
 
 // ─── Convierte HTML → canvas → PDF → File y lo sube a Pinata ─────────────────
-const generarCertificadoPDF = async (datos, qrDataUrl, tipo, uploadToIPFS) => {
+const generarCertificadoPDF = async (datos, qrDataUrl, tipo, motivo, uploadToIPFS) => {
   console.log("Generando certificado PDF para ID:", datos.id);
 
-  const htmlContent = generarHTMLCertificado(datos, qrDataUrl, tipo);
+  const htmlContent = generarHTMLCertificado(datos, qrDataUrl, tipo, motivo);
 
   const containerId = `cert-${Date.now()}`;
   const container = document.createElement('div');
@@ -699,16 +710,51 @@ const hideLoading = () => {
   // NO poner setLoading(false) aquí, se maneja aparte
 };
 
+const PROVINCIAS = [
+  { id: "santo_domingo", nombre: "Santo Domingo" },
+  { id: "santiago", nombre: "Santiago" },
+  { id: "la_altagracia", nombre: "La Altagracia" },
+  // ... etc
+];
+
+const MUNICIPIOS_POR_PROVINCIA = {
+  santo_domingo: ["Santo Domingo de Guzmán (Distrito Nacional)", "Santo Domingo Este", "Santo Domingo Norte", "Santo Domingo Oeste", "Boca Chica", "Los Alcarrizos", "Pedro Brand", "San Antonio de Guerra"],
+  santiago: ["Santiago de los Caballeros", "Licey al Medio", "Puñal", "Tamboril", "Villa González"],
+  la_altagracia: ["Higüey", "San Rafael del Yuma"]
+  // ... etc
+};
+
+// Estados para provincia y municipio (menús desplegables)
+const [selectedProvincia, setSelectedProvincia] = useState('santo_domingo');
+const [availableMunicipios, setAvailableMunicipios] = useState(MUNICIPIOS_POR_PROVINCIA.santo_domingo);
+
+// Manejar cambio de provincia (actualiza los municipios disponibles)
+const handleProvinciaChange = (e) => {
+  const provinciaId = e.target.value;
+  setSelectedProvincia(provinciaId);
+  setAvailableMunicipios(MUNICIPIOS_POR_PROVINCIA[provinciaId] || []);
+  
+  // Obtener el NOMBRE de la provincia seleccionada
+  const provinciaNombre = PROVINCIAS.find(p => p.id === provinciaId)?.nombre || provinciaId;
+  
+  // Resetear municipio y actualizar provincia con el NOMBRE legible
+  setFormData(prev => ({ 
+    ...prev, 
+    municipio: '', 
+    provincia: provinciaNombre   // ← Ahora guarda "Santo Domingo" no "santo_domingo"
+  }));
+};
+
   // Registrador eliminado del formulario — es una constante del sistema
   const [formData, setFormData] = useState({
-    ownerName: '', ownerId: '', nationality: 'Dominicana',
-    propertyLocation: '', district: '', parcel: '', area: '', registrationDate: '',
-    provincia: 'SANTO DOMINGO DE GUZMÁN',
-    municipio: 'SANTO DOMINGO, D.N.',
-  });
+  ownerName: '', ownerId: '', nationality: 'Dominicana',
+  propertyLocation: '', district: '', parcel: '', area: '', registrationDate: '',
+  provincia: 'Santo Domingo',        // ← Valor inicial legible
+  municipio: '',                     // ← Vacío, el usuario debe seleccionar
+});
 
   const handleInputChange = (e) => setFormData({ ...formData, [e.target.name]: e.target.value });
-  const handleTransferChange = (e) => setTransferData({ ...transferData, [e.target.name]: e.target.value });
+const handleTransferChange = (e) => setTransferData({ ...transferData, [e.target.name]: e.target.value });  // ← Esta línea
 
   const handleFileSelect = (e) => {
     const file = e.target.files[0];
@@ -810,7 +856,7 @@ const registerProperty = async (e) => {
 
     // Generar certificado y subir a IPFS (solo si la validación pasó)
     showLoading("Generando certificado digital y subiendo a IPFS...");
-    const ipfsHashFinal = await generarCertificadoPDF(datosCert, qrUrlTemp, 'REGISTRO INICIAL', uploadToIPFS);
+    const ipfsHashFinal = await generarCertificadoPDF(datosCert, qrUrlTemp, 'REGISTRO INICIAL', '', uploadToIPFS);
 
     if (!ipfsHashFinal) {
       hideLoading();
@@ -944,7 +990,7 @@ const transferProperty = async (e) => {
 
     // Generar nuevo certificado con los datos del nuevo propietario
     showLoading("Generando nuevo certificado digital...");
-    const nuevoIpfsHash = await generarCertificadoPDF(datosNuevoCert, nuevoQrUrl, 'TRASPASO', uploadToIPFS);
+    const nuevoIpfsHash = await generarCertificadoPDF(datosNuevoCert, nuevoQrUrl, 'TRASPASO', transferData.transferNote, uploadToIPFS);
     
     if (!nuevoIpfsHash) {
       hideLoading();
@@ -1116,7 +1162,7 @@ const transferProperty = async (e) => {
                 <div className="form-grid">
                   <div className="form-group">
                     <label className="form-label">Nombre del Propietario<span className="req">*</span></label>
-                    <input type="text" name="ownerName" value={formData.ownerName} onChange={handleInputChange} required className="form-control" />
+                    <input type="text" name="ownerName" value={formData.ownerName} onChange={handleInputChange} placeholder="Nombre completo" required className="form-control" />
                   </div>
                   <div className="form-group">
                     <label className="form-label">Cédula<span className="req">*</span></label>
@@ -1127,24 +1173,45 @@ const transferProperty = async (e) => {
                     <input type="text" name="nationality" value={formData.nationality} onChange={handleInputChange} className="form-control" />
                   </div>
                   <div className="form-group">
-                    <label className="form-label">Provincia</label>
-                    <input type="text" name="provincia" value={formData.provincia} onChange={handleInputChange} className="form-control" />
-                  </div>
+  <label className="form-label">Provincia<span className="req">*</span></label>
+  <select 
+    name="provincia" 
+    value={selectedProvincia}
+    onChange={handleProvinciaChange}
+    className="form-control"
+    required
+  >
+    {PROVINCIAS.map(prov => (
+      <option key={prov.id} value={prov.id}>{prov.nombre}</option>
+    ))}
+  </select>
+</div>
                   <div className="form-group">
-                    <label className="form-label">Municipio</label>
-                    <input type="text" name="municipio" value={formData.municipio} onChange={handleInputChange} className="form-control" />
-                  </div>
+  <label className="form-label">Municipio<span className="req">*</span></label>
+  <select 
+    name="municipio" 
+    value={formData.municipio}
+    onChange={handleInputChange}
+    className="form-control"
+    required
+  >
+    <option value="">Seleccione un municipio</option>
+    {availableMunicipios.map(mun => (
+      <option key={mun} value={mun}>{mun}</option>
+    ))}
+  </select>
+</div>
                   <div className="form-group">
                     <label className="form-label">Ubicación</label>
-                    <input type="text" name="propertyLocation" value={formData.propertyLocation} onChange={handleInputChange} placeholder="Santo Domingo de Guzmán" className="form-control" />
+                    <input type="text" name="propertyLocation" value={formData.propertyLocation} onChange={handleInputChange} placeholder="Calle/Avenida, Número" className="form-control" />
                   </div>
                   <div className="form-group">
                     <label className="form-label">Distrito Catastral</label>
-                    <input type="text" name="district" value={formData.district} onChange={handleInputChange} placeholder="Distrito No.18" className="form-control" />
+                    <input type="text" name="district" value={formData.district} onChange={handleInputChange} placeholder="Número de Distrito Catastral" className="form-control" />
                   </div>
                   <div className="form-group">
                     <label className="form-label">Parcela<span className="req">*</span></label>
-                    <input type="text" name="parcel" value={formData.parcel} onChange={handleInputChange} placeholder="Parcela 10-A" required className="form-control" />
+                    <input type="text" name="parcel" value={formData.parcel} onChange={handleInputChange} placeholder="Número de Parcela" required className="form-control" />
                     
                   </div>
                   <div className="form-group">
@@ -1192,10 +1259,17 @@ const transferProperty = async (e) => {
                     <input type="text" name="newOwnerId" value={transferData.newOwnerId} onChange={handleTransferChange} placeholder="001-01-00001" required className="form-control" />
                   </div>
                   <div className="form-group">
-                    <label className="form-label">Motivo del Traspaso</label>
-                    <input type="text" name="transferNote" value={transferData.transferNote} onChange={handleTransferChange}
-                      placeholder="Compraventa, herencia, donación..." className="form-control" />
-                  </div>
+  <label className="form-label">Motivo del Traspaso<span className="req">*</span></label>
+  <select name="transferNote" value={transferData.transferNote} onChange={handleTransferChange} className="form-control" required>
+    <option value="">Seleccione el motivo</option>
+    <option value="COMPRAVENTA">Compraventa</option>
+    <option value="HERENCIA">Herencia</option>
+    <option value="DONACIÓN">Donación</option>
+    <option value="PERMUTA">Permuta</option>
+    <option value="ADJUDICACIÓN">Adjudicación</option>
+    <option value="PRESCRIPCIÓN ADQUISITIVA">Prescripción Adquisitiva (Usucapión)</option>
+  </select>
+</div>
                 </div>
                 <button type="submit" className="btn btn-danger btn-full" disabled={loading}>
                   {loading ? 'Procesando transacción...' : <><IconTransfer /> Registrar Traspaso</>}
