@@ -77,6 +77,19 @@ text
 
 ## Instalacion local
 
+## Capturas de pantalla
+
+Pantalla principal:
+
+![Pantalla principal](screenshots/pantalla-principal.png)
+
+Formulario de registro:
+
+![Formulario de registro](screenshots/formulario-registro.png)
+
+Certificado PDF generado:
+
+![Certificado PDF](screenshots/certificado-pdf.png)
 
 # Clonar repositorio
 git clone https://github.com/AlfredSantana/registro-titulos.git
